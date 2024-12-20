@@ -1,3 +1,4 @@
 *.venv
 .env
 course_materials
+__pycache__
