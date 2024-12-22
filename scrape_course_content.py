@@ -69,23 +69,23 @@ async def scrape_submodule_content(submodule_url):
 
         # Extract the main content
         main_content = await page.query_selector("main.lesson-main")
-        main_content_html = await main_content.inner_html()
+        html_content = await main_content.inner_html()
             
         # Close the browser
         await browser.close()
 
-        return main_content_html
+        return html_content
 
 async def process_submodule(submodule):
     """Processes a single submodule, by scraping its main content"""
     print(f"-- Scraping content of {submodule['title']} ({submodule['url']})")
     
     try:
-        main_content_html = await scrape_submodule_content(submodule['url'])
+        html_content = await scrape_submodule_content(submodule['url'])
     except Exception as e:
         print(f"-- Error scraping content for {submodule['title']} ({submodule['url']}): {e}")
-        main_content_html = None
-    return main_content_html
+        html_content = None
+    return html_content
 
 async def process_module(module, output_dir, con_limit=5):
     """Processes a single module, by scraping its submodules content"""
@@ -107,7 +107,7 @@ async def process_module(module, output_dir, con_limit=5):
 
     # Collect results
     for i, result in enumerate(processed_submodules):
-        submodule_data[i]['main_content_html'] = result
+        submodule_data[i]['html_content'] = result
             
     # Save results
     save_output(
