@@ -165,18 +165,18 @@ async def main():
     # Load input data
     module_data = load_input(args.input_json)
     
-    # Check if the input JSON file exists
+    # Validate the input JSON file path
     if not os.path.isfile(args.input_json):
         parser.error(f"The input JSON file '{args.input_json}' does not exist.")
-        
-    # Check if the output directory exists
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
     
     # Validate concurrency limit
     if args.con_limit <= 0:
         parser.error("The concurrency limit (--con_limit) must be a positive integer.")
         
+    # Check if the output directory exists
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    
     # Process modules sequentially
     for module in module_data:
         await process_module(module, args.output_dir, args.con_limit)
