@@ -21,8 +21,40 @@ async def gather_with_concurrency(limit, *tasks):
 
     return await asyncio.gather(*(sem_task(task) for task in tasks))
 
-async def scrape_submodule_urls(module_url):
-    """Scrapes submodule URLs and titles from a given module URL."""
+# async def scrape_submodule_urls(module_url):
+#     """Scrapes submodule URLs and titles from a given module URL."""
+#     async with async_playwright() as p:
+#         # Launch browser
+#         browser = await p.chromium.launch(headless=True)
+#         context = await browser.new_context()
+#         page = await context.new_page()
+
+#         # Navigate to the page
+#         await page.goto(module_url)
+
+#         # Wait for the table of contents to load
+#         await page.wait_for_selector("nav.overview-list", timeout=10000)
+
+#         # Extract all the hyperlinks of the submodule
+#         hyperlinks = await page.locator("nav.overview-list a").all()
+
+#         # Initialize a list to store extracted data
+#         submodule_data = []
+
+#         # Loop through each hyperlink and extract the href and text
+#         for hyperlink in hyperlinks:
+#             href = await hyperlink.get_attribute('href')
+#             text = await hyperlink.inner_text()
+#             submodule_data.append({'url': urljoin(module_url, href), 
+#                                    'title': text.strip()})  
+            
+#         # Close the browser
+#         await browser.close()
+
+#         return submodule_data
+
+async def scrape_module_structure(module_url):
+    """Scrapes the module title and sections, along with submodule title and URLs of a given module URL."""
     async with async_playwright() as p:
         # Launch browser
         browser = await p.chromium.launch(headless=True)
@@ -35,23 +67,34 @@ async def scrape_submodule_urls(module_url):
         # Wait for the table of contents to load
         await page.wait_for_selector("nav.overview-list", timeout=10000)
 
-        # Extract all the hyperlinks of the submodule
-        hyperlinks = await page.locator("nav.overview-list a").all()
-
-        # Initialize a list to store extracted data
+        # Extract the module title
+        module_title = await page.locator("header h1").inner_text()
+        
+        # Extract the module subsections
+        module_subsections = await page.locator("nav.overview-list section").all()
+        
+        # Extract all the submodule hyperlinks within each module 
         submodule_data = []
-
-        # Loop through each hyperlink and extract the href and text
-        for hyperlink in hyperlinks:
-            href = await hyperlink.get_attribute('href')
-            text = await hyperlink.inner_text()
-            submodule_data.append({'url': urljoin(module_url, href), 
-                                   'title': text.strip()})  
-            
+        for subsection in module_subsections:
+            subsection_title = await subsection.locator("h2").inner_text()
+            hyperlinks = await subsection.locator("a").all()
+            for hyperlink in hyperlinks:
+                href = await hyperlink.get_attribute('href')
+                text = await hyperlink.inner_text()
+                submodule_data.append({'url': urljoin(module_url, href), 
+                                       'title': text.strip(),
+                                       'subsection': subsection_title})            
         # Close the browser
         await browser.close()
 
-        return submodule_data
+        module_structure = {
+            "module_title": module_title,
+            "module_url": module_url,
+            "submodule_data": submodule_data
+        }
+        
+        return module_structure
+        
     
 async def scrape_submodule_content(submodule_url):
     """Scrapes the main content of a given submodule URL."""
@@ -76,32 +119,31 @@ async def scrape_submodule_content(submodule_url):
 
         return html_content
 
-async def process_submodule(submodule):
+async def process_submodule(submodule_url):
     """Processes a single submodule, by scraping its main content"""
-    print(f"-- Scraping content of {submodule['title']} ({submodule['url']})")
+    print(f"-- Scraping content of {submodule_url}")
     
     try:
-        html_content = await scrape_submodule_content(submodule['url'])
+        html_content = await scrape_submodule_content(submodule_url)
     except Exception as e:
-        print(f"-- Error scraping content for {submodule['title']} ({submodule['url']}): {e}")
+        print(f"-- Error scraping content for submodule_url: {e}")
         html_content = None
     return html_content
 
-async def process_module(module, output_dir, con_limit=5):
-    """Processes a single module, by scraping its submodules content"""
-    module_name = module['module_name']
-    module_url = module['module_url']
-    print(f"Scraping submodules of {module_name} ({module_url})")
+async def process_module(module_url, output_dir, con_limit=5):
+    """Processes a single module, by scraping its metadata and submodules content"""
+    print(f"Scraping submodules of {module_url}")
     
     try:
-        submodule_data = await scrape_submodule_urls(module_url)
+        module_structure = await scrape_module_structure(module_url)
     except Exception as e:
-        print(f"Error scraping submodule URLs for {module_name} ({module_url}): {e}")
+        print(f"Error scraping submodule URLs for {module_url}: {e}")
         return # stop processing this module
     
     # Process submodules concurrently
+    submodule_data = module_structure['submodule_data']
     submodule_tasks = [
-        process_submodule(submodule) for submodule in submodule_data
+        process_submodule(submodule['url']) for submodule in submodule_data
     ]
     processed_submodules = await gather_with_concurrency(con_limit, *submodule_tasks)
 
@@ -111,16 +153,20 @@ async def process_module(module, output_dir, con_limit=5):
             
     # Save results
     save_output(
-        {"module_url": module_url, "submodule_data": submodule_data},
+        module_structure,
         output_dir,
-        module_name
+        module_structure['module_title']
     )
 
 def load_input(input_json_path):
     """Load the input containing module URLs from a JSON file."""
     with open(input_json_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
+        data = json.load(f)
+        if 'module_urls' in data:
+            return data['module_urls']
+        else:
+            raise ValueError("Input JSON file must contain a 'module_urls' key with a list of URLs.")
+        
 def sanitize_filename(name):
     """Sanitize a string to be used as a filename."""
     filename = name.replace(" ", "_").replace(".", "_")
@@ -163,7 +209,7 @@ async def main():
     args = parser.parse_args()
 
     # Load input data
-    module_data = load_input(args.input_json)
+    module_urls = load_input(args.input_json)
     
     # Validate the input JSON file path
     if not os.path.isfile(args.input_json):
@@ -178,8 +224,8 @@ async def main():
         os.makedirs(args.output_dir)
     
     # Process modules sequentially
-    for module in module_data:
-        await process_module(module, args.output_dir, args.con_limit)
+    for module_url in module_urls:
+        await process_module(module_url, args.output_dir, args.con_limit)
 
 if __name__ == "__main__":
     asyncio.run(main())
