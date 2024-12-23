@@ -1,6 +1,8 @@
+import re
+
 from bs4 import BeautifulSoup
 from markdownify import MarkdownConverter
-import re
+
 
 class ContentMDConverter(MarkdownConverter):
     """
@@ -12,7 +14,7 @@ class ContentMDConverter(MarkdownConverter):
         """
         title = el.attrs.get('title', '')
         src = el.attrs.get('src', '')
-        return f'<iframe title="{title}" src="{src}">\n\n'
+        return f'<iframe title="{title}" src="{src}"></iframe>\n\n'
     
     def _convert_hn(self, n, el, text, convert_as_inline):
         """
@@ -30,11 +32,21 @@ class ContentHTMLProcessor:
     """
     def __init__(self, html):
         self.soup = BeautifulSoup(html, 'html.parser')
-        
+    
+    def exclude_elements(self, css_selector=None):
+        """
+        Excludes elements matching the given CSS selector(s) from the HTML.
+        """
+        if css_selector:
+            excluded_elements = self.soup.select(css_selector)
+            for element in excluded_elements:
+                element.decompose()
+        return self
+    
     def modify_divs_spacing(self):
         """Insert <br> tags after each <div> element to ensure all divs are separated by a newline. The current implementation of markdownify does not handle this well.
         """
-        for div in self.soup.find_all('div'):
+        for div in self.soup.select('div'):
             div.insert_after(self.soup.new_tag('br'))
         return self
 
@@ -62,10 +74,11 @@ class ContentFormatter:
     """
     Class to format course content from HTML to Markdown.
     """
-    def __init__(self, html, **md_converter_options):
+    def __init__(self, html, excluded_elements_css=None, **md_converter_options):
         self.html = html
         self.md_converter_options = {"heading_style": "html"}
         self.md_converter_options.update(md_converter_options) 
+        self.excluded_elements_css = excluded_elements_css
 
     @staticmethod
     def _clean_spacing(text):
@@ -73,13 +86,13 @@ class ContentFormatter:
         text = re.sub(r'\s*\n\s*', '\n', text)
         text = re.sub(r'\n+', '\n\n', text)
         text = re.sub(r'(\n\n>)+', '\n\n>', text)
-        return text.lstrip()    
+        return text.lstrip()
     
     def _html_to_md(self, html):
         """Preprocess and convert HTML content to Markdown."""
         # Preprocess the HTML content
         html_processor = ContentHTMLProcessor(html)
-        html_processor.modify_divs_spacing().extract_font_size()
+        html_processor.modify_divs_spacing().extract_font_size().exclude_elements(self.excluded_elements_css)
         processed_html = html_processor.get_html()
         
         # Convert the processed HTML content to Markdown
@@ -112,7 +125,7 @@ class ContentFormatter:
         """Convert HTML content to Markdown. If split_blocks is True, the content will be split into blocks based on the lesson block divs."""
         if split_blocks:
             soup = BeautifulSoup(self.html, 'html.parser')
-            lesson_block_divs = soup.find('section', class_='blocks-lesson').find_all('div', recursive=False)
+            lesson_block_divs = soup.select('section.blocks-lesson > div')
             return self._process_lesson_blocks(lesson_block_divs)
         else:
             return self._html_to_md(self.html)
