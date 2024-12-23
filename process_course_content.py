@@ -78,9 +78,9 @@ class ContentFormatter:
     def _html_to_md(self, html):
         """Preprocess and convert HTML content to Markdown."""
         # Preprocess the HTML content
-        processor = ContentHTMLProcessor(html)
-        processor.modify_divs_spacing().extract_font_size()
-        processed_html = processor.get_html()
+        html_processor = ContentHTMLProcessor(html)
+        html_processor.modify_divs_spacing().extract_font_size()
+        processed_html = html_processor.get_html()
         
         # Convert the processed HTML content to Markdown
         md_converter = ContentMDConverter(**self.md_converter_options)
@@ -108,7 +108,7 @@ class ContentFormatter:
         
         return data_blocks
     
-    def format_content(self, split_blocks=True):
+    def to_md(self, split_blocks=True):
         """Convert HTML content to Markdown. If split_blocks is True, the content will be split into blocks based on the lesson block divs."""
         if split_blocks:
             soup = BeautifulSoup(self.html, 'html.parser')
