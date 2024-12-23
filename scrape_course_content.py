@@ -152,18 +152,34 @@ async def main():
         required=True,
         help="Directory to save the output JSON files. The output files will be named as {module_name}.json."
     )
+    parser.add_argument(
+        "--con_limit",
+        required=False,
+        default=5,
+        type=int,
+        help="Concurrency limit for processing submodules. Default is 5.",
+    )
+    
     args = parser.parse_args()
 
     # Load input data
     module_data = load_input(args.input_json)
     
+    # Check if the input JSON file exists
+    if not os.path.isfile(args.input_json):
+        parser.error(f"The input JSON file '{args.input_json}' does not exist.")
+        
     # Check if the output directory exists
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
+    
+    # Validate concurrency limit
+    if args.con_limit <= 0:
+        parser.error("The concurrency limit (--con_limit) must be a positive integer.")
         
     # Process modules sequentially
     for module in module_data:
-        await process_module(module, args.output_dir)
+        await process_module(module, args.output_dir, args.con_limit)
 
 if __name__ == "__main__":
     asyncio.run(main())
