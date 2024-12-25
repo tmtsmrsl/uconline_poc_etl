@@ -81,24 +81,24 @@ class ContentFormatter:
         self.excluded_elements_css = excluded_elements_css
 
     @staticmethod
-    def _clean_spacing(text):
+    def clean_spacing(text):
         """Strip excessive newlines and unnecessary spaces."""
         text = re.sub(r'\s*\n\s*', '\n', text)
         text = re.sub(r'\n+', '\n\n', text)
         text = re.sub(r'(\n\n>)+', '\n\n>', text)
-        return text.lstrip()
+        return text
     
     def _html_to_md(self, html):
         """Preprocess and convert HTML content to Markdown."""
         # Preprocess the HTML content
         html_processor = ContentHTMLProcessor(html)
-        html_processor.modify_divs_spacing().extract_font_size().exclude_elements(self.excluded_elements_css)
+        html_processor.modify_divs_spacing().exclude_elements(self.excluded_elements_css)
         processed_html = html_processor.get_html()
         
         # Convert the processed HTML content to Markdown
         md_converter = ContentMDConverter(**self.md_converter_options)
         md_content = md_converter.convert(processed_html)
-        md_content = self._clean_spacing(md_content)
+        md_content = self.clean_spacing(md_content)
         return md_content
     
     def _process_lesson_blocks(self, lesson_block_divs):
@@ -109,15 +109,17 @@ class ContentFormatter:
         for div in lesson_block_divs:
             data_block_id = div.get('data-block-id', '')
             md_content = self._html_to_md(str(div))
-            char_length = len(md_content)
             
-            data_blocks.append({
-                "data_block_id": data_block_id,
-                "md_content": md_content,
-                "char_start": offset,
-                "char_end": offset + char_length - 1
-            })
-            offset += char_length
+            # check if md_content contains characters other than whitespace
+            if md_content.strip() != "":
+                char_length = len(md_content)
+                data_blocks.append({
+                    "data_block_id": data_block_id,
+                    "md_content": md_content,
+                    "char_start": offset,
+                    "char_end": offset + char_length - 1
+                })
+                offset += char_length
         
         return data_blocks
     
