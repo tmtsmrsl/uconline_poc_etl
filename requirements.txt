@@ -1,4 +1,12 @@
 docling==2.13.0
+python-dotenv==1.0.1
 playwright==1.49.1
 beautifulsoup4==4.12.3
 markdownify==0.14.1
+tiktoken==0.8.0
+langchain-text-splitters==0.3.4
+langchain-huggingface==0.1.2
+langchain-milvus==0.1.7
+pymilvus==2.5.1
+torch==2.5.1
+
