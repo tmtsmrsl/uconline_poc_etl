@@ -183,22 +183,20 @@ class ContentDocProcessor:
 
         splits = text_splitter.create_documents([combined_md])
         splits = self._add_overlap(splits, self.chunk_token_overlap)
-        for split in splits:
-            split.page_content = ContentMDFormatter.clean_spacing(split.page_content)
         return splits
-
 
     def _post_process_splits(self, splits: List[Any], metadata: Dict[str, Any]) -> List[Any]:
         """Post-process the splits, adding metadata and formatting content."""
         for split in splits:
-            split.metadata.update(metadata)
-            split.metadata['split_char_start'] = split.metadata['start_index'] + 1
-            split.metadata['split_char_end'] = split.metadata['split_char_start'] + len(split.page_content) - 1
-            del split.metadata['start_index']
-            
             # Adding this prefix will help preserve the contextual information of the split
             prefix = f"This is part of the lesson: {metadata['module_title']} - {metadata['subsection']}: {metadata['submodule_title']}"
             split.page_content = f"{prefix}\n\n{split.page_content.strip()}"
+            
+            split.metadata.update(metadata)
+            split.metadata['split_char_start'] = split.metadata['start_index'] + 1 + len(prefix)
+            split.metadata['split_char_end'] = split.metadata['split_char_start'] + len(split.page_content) - 1
+            del split.metadata['start_index']
+            
         return splits
 
     def _process_submodule(self, submodule: Dict[str, Any], module_title: str) -> Dict[str, Any]:
@@ -225,6 +223,7 @@ class ContentDocProcessor:
         temp_submodule['doc_splits'] = self._split_text(combined_md)
         
         metadata = {
+            "combined_md": combined_md,
             "data_block_ranges": data_block_ranges,
             "module_title": module_title.title(),
             "subsection": temp_submodule['subsection'].title(),
