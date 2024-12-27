@@ -161,8 +161,10 @@ class ContentDocProcessor:
         for split in splits:
             current_chunk = split.page_content
             split.page_content = overlap_from_prev + current_chunk
+            split.metadata['start_index'] -= len(overlap_from_prev)
             current_chunk_tokens = encoding.encode(current_chunk)
             overlap_from_prev = encoding.decode(current_chunk_tokens[-chunk_token_overlap:])
+            
         return splits
     
     def _split_text(self, combined_md: str) -> List[Any]:
@@ -195,7 +197,7 @@ class ContentDocProcessor:
             split.metadata.update(metadata)
             # adjust the split char indexes to they are still consistent with the data block ranges
             split.metadata['split_char_start'] = split.metadata['start_index'] - len(prefix)
-            split.metadata['split_char_end'] = split.metadata['split_char_start'] + len(split.page_content) - 1
+            split.metadata['split_char_end'] = split.metadata['end_index'] - len(prefix)
             del split.metadata['start_index']
             
         return splits
@@ -224,7 +226,6 @@ class ContentDocProcessor:
         temp_submodule['doc_splits'] = self._split_text(combined_md)
         
         metadata = {
-            "combined_md": combined_md,
             "data_block_ranges": data_block_ranges,
             "module_title": module_title.title(),
             "subsection": temp_submodule['subsection'].title(),
