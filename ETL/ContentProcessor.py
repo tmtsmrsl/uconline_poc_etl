@@ -110,7 +110,7 @@ class ContentMDFormatter:
     def _process_lesson_blocks(self, lesson_block_divs: List[Any]) -> List[Dict[str, Any]]:
         """Process lesson blocks into Markdown with metadata."""
         data_blocks = []
-        offset = 1
+        offset = 0
         
         for div in lesson_block_divs:
             data_block_id = div.get('data-block-id', '')
@@ -184,16 +184,17 @@ class ContentDocProcessor:
         splits = text_splitter.create_documents([combined_md])
         splits = self._add_overlap(splits, self.chunk_token_overlap)
         return splits
-
+    
     def _post_process_splits(self, splits: List[Any], metadata: Dict[str, Any]) -> List[Any]:
         """Post-process the splits, adding metadata and formatting content."""
         for split in splits:
             # Adding this prefix will help preserve the contextual information of the split
-            prefix = f"This is part of the lesson: {metadata['module_title']} - {metadata['subsection']}: {metadata['submodule_title']}"
-            split.page_content = f"{prefix}\n\n{split.page_content.strip()}"
+            prefix = f"This is part of the lesson: {metadata['module_title']} - {metadata['subsection']}: {metadata['submodule_title']}\n\n"
+            split.page_content = f"{prefix}{split.page_content}"
             
             split.metadata.update(metadata)
-            split.metadata['split_char_start'] = split.metadata['start_index'] + 1 + len(prefix)
+            # adjust the split char indexes to they are still consistent with the data block ranges
+            split.metadata['split_char_start'] = split.metadata['start_index'] - len(prefix)
             split.metadata['split_char_end'] = split.metadata['split_char_start'] + len(split.page_content) - 1
             del split.metadata['start_index']
             
