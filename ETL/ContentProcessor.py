@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
 import tiktoken
+import unicodedata
 from bs4 import BeautifulSoup
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from markdownify import MarkdownConverter
@@ -94,6 +95,11 @@ class ContentMDFormatter:
         text = re.sub(r'(\n\n>)+', '\n\n>', text)
         return text
 
+    @staticmethod
+    def clean_unicode_char(text: str) -> str:
+        """Perform unicode normalization to ensures that text is represented in a consistent way"""
+        return unicodedata.normalize('NFKC', text)
+    
     def _html_to_md(self, html: str) -> str:
         """Preprocess and convert HTML content to Markdown."""
         # Preprocess the HTML content
@@ -105,6 +111,7 @@ class ContentMDFormatter:
         md_converter = CustomMDConverter(**self.md_converter_options)
         md_content = md_converter.convert(processed_html)
         md_content = self.clean_spacing(md_content)
+        md_content = self.clean_unicode_char(md_content)
         return md_content
     
     def _process_lesson_blocks(self, lesson_block_divs: List[Any]) -> List[Dict[str, Any]]:
@@ -193,12 +200,8 @@ class ContentDocProcessor:
             # Adding this prefix will help preserve the contextual information of the split
             prefix = f"This is part of the lesson: {metadata['module_title']} - {metadata['subsection']}: {metadata['submodule_title']}\n\n"
             split.page_content = f"{prefix}{split.page_content}"
-            
+            split.metadata['prefix_len'] = len(prefix)
             split.metadata.update(metadata)
-            # adjust the split char indexes to they are still consistent with the data block ranges
-            split.metadata['split_char_start'] = split.metadata['start_index'] - len(prefix)
-            split.metadata['split_char_end'] = split.metadata['end_index'] - len(prefix)
-            del split.metadata['start_index']
             
         return splits
 
