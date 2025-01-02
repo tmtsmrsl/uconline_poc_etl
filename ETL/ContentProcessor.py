@@ -195,6 +195,22 @@ class ContentDocProcessor:
         lc_splits = self._add_overlap(lc_splits, self.chunk_token_overlap)
         return lc_splits
     
+    @staticmethod
+    def _convert_lc_doc_to_dict(doc: Document) -> Dict[str, Any]:
+        """Convert Langchain document into dict format."""
+        doc_dict = doc.dict()
+        
+        for k, v in doc_dict['metadata'].items():
+            doc_dict[k] = v
+        
+        doc_dict['text'] = doc_dict.pop('page_content')
+        doc_dict.pop('id', None)
+        doc_dict.pop('type', None)
+        doc_dict.pop('metadata', None)
+        
+        return doc_dict
+    
+    
     def _post_process_splits(self, lc_splits: List[Document], metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Post-process the splits, adding metadata, formatting content, and converting to dict format."""
         temp_splits = deepcopy(lc_splits)
@@ -206,10 +222,7 @@ class ContentDocProcessor:
             split.metadata.update(metadata)
         
         # Convert Langchain document into dict format and remove unnecessary fields
-        temp_splits = [split.dict() for split in temp_splits]
-        for split in temp_splits:
-            split.pop('id', None) 
-            split.pop('type', None)
+        temp_splits = [self._convert_lc_doc_to_dict(split) for split in temp_splits]
             
         return temp_splits
 
