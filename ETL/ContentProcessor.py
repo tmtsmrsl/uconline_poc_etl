@@ -8,6 +8,7 @@ import tiktoken
 import unicodedata
 from bs4 import BeautifulSoup
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents.base import Document
 from markdownify import MarkdownConverter
 
 
@@ -148,10 +149,10 @@ class ContentMDFormatter:
 
 class ContentDocProcessor:
     """
-    Class to process course content from HTML to LangChain document, which will be used for embedding.
+    Class to process course content from HTML to documents (a dict with content and metadata), which will be used for embedding.
     """
 
-    def __init__(self, excluded_elements_css: str, chunk_token_size: int = 500, chunk_token_overlap: int = 50, encoding_name: str = "o200k_base") -> None:
+    def __init__(self, excluded_elements_css: Optional[str] = None, chunk_token_size: int = 500, chunk_token_overlap: int = 50, encoding_name: str = "o200k_base") -> None:
         self.excluded_elements_css = excluded_elements_css
         self.encoding_name = encoding_name
         self.chunk_token_size = chunk_token_size
@@ -161,20 +162,20 @@ class ContentDocProcessor:
         """Combine lesson blocks into a single Markdown string."""
         return "".join(block['md_content'] for block in lesson_blocks)
     
-    def _add_overlap(self, splits: List[Any], chunk_token_overlap: int) -> List[Any]:
+    def _add_overlap(self, lc_splits: List[Document], chunk_token_overlap: int) -> List[Document]:
         """Adds overlapping tokens to preserve flow when splitting documents."""
         encoding = tiktoken.get_encoding(self.encoding_name)
         overlap_from_prev = ""
-        for split in splits:
+        for split in lc_splits:
             current_chunk = split.page_content
             split.page_content = overlap_from_prev + current_chunk
             split.metadata['start_index'] -= len(overlap_from_prev)
             current_chunk_tokens = encoding.encode(current_chunk)
             overlap_from_prev = encoding.decode(current_chunk_tokens[-chunk_token_overlap:])
             
-        return splits
+        return lc_splits
     
-    def _split_text(self, combined_md: str) -> List[Any]:
+    def _split_text(self, combined_md: str) -> List[Document]:
         """Split combined Markdown content into smaller chunks based on token size."""
         h_tags = ['<h1>', '<h2>', '<h3>']
         whitespace_separators = ["\n\n\n\n", "\n\n", "\n", " ", ""]
@@ -190,23 +191,30 @@ class ContentDocProcessor:
             add_start_index=True
         )
 
-        splits = text_splitter.create_documents([combined_md])
-        splits = self._add_overlap(splits, self.chunk_token_overlap)
-        return splits
+        lc_splits = text_splitter.create_documents([combined_md])
+        lc_splits = self._add_overlap(lc_splits, self.chunk_token_overlap)
+        return lc_splits
     
-    def _post_process_splits(self, splits: List[Any], metadata: Dict[str, Any]) -> List[Any]:
-        """Post-process the splits, adding metadata and formatting content."""
-        for split in splits:
+    def _post_process_splits(self, lc_splits: List[Document], metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Post-process the splits, adding metadata, formatting content, and converting to dict format."""
+        temp_splits = deepcopy(lc_splits)
+        for split in temp_splits:
             # Adding this prefix will help preserve the contextual information of the split
             prefix = f"This is part of the lesson: {metadata['module_title']} - {metadata['subsection']}: {metadata['submodule_title']}\n\n"
             split.page_content = f"{prefix}{split.page_content}"
             split.metadata['prefix_len'] = len(prefix)
             split.metadata.update(metadata)
+        
+        # Convert Langchain document into dict format and remove unnecessary fields
+        temp_splits = [split.dict() for split in temp_splits]
+        for split in temp_splits:
+            split.pop('id', None) 
+            split.pop('type', None)
             
-        return splits
+        return temp_splits
 
     def _process_submodule(self, submodule: Dict[str, Any], module_title: str) -> Dict[str, Any]:
-        """Process lesson blocks for a submodule into LangChain document splits."""
+        """Process lesson blocks for a submodule into document splits."""
         temp_submodule = deepcopy(submodule)
         
         # Convert HTML content to Markdown blocks
@@ -226,7 +234,7 @@ class ContentDocProcessor:
         
         # Update submodule with lesson blocks and document splits
         temp_submodule['md_lesson_blocks'] = md_lesson_blocks
-        temp_submodule['doc_splits'] = self._split_text(combined_md)
+        temp_submodule['lc_splits'] = self._split_text(combined_md)
         
         metadata = {
             "data_block_ranges": data_block_ranges,
@@ -236,8 +244,10 @@ class ContentDocProcessor:
             "submodule_url": temp_submodule['url']
         }
         
-        # Post-process splits with metadata and content formatting
-        temp_submodule['doc_splits'] = self._post_process_splits(temp_submodule['doc_splits'], metadata)
+        # Post-process splits (formatting, metadata, dict conversion)
+        temp_submodule['doc_splits'] = self._post_process_splits(temp_submodule['lc_splits'], metadata)
+        temp_submodule.pop('lc_splits', None)
+        
         return temp_submodule
     
     @staticmethod
@@ -252,8 +262,8 @@ class ContentDocProcessor:
             if not all(key in submodule for key in keys):
                 raise ValueError(f"Missing keys in submodule: {submodule}")
     
-    def process_module(self, module_data: Dict[str, Any]) -> List[Any]:
-        """Process all submodules in a module into LangChain documents."""
+    def process_module(self, module_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Process all submodules in a module into documents."""
         self._validate_module_data(module_data)
         module_title = module_data['module_title']
         docs = []
@@ -261,21 +271,15 @@ class ContentDocProcessor:
         for submodule in module_data['submodule_data']:
             submodule = self._process_submodule(submodule, module_title)
             docs.extend(submodule['doc_splits'])
+        
         return docs
 
-    def run(self, input_json: str, output_dir: Optional[str] = None) -> List[Any]:
-        """Process all submodules in the input JSON file into LangChain documents and save the output."""
+    def run(self, input_json: str) -> List[Dict[str, Any]]:
+        """Process all submodules in the input JSON file into documents."""
         with open(input_json, "r", encoding="utf-8") as f:
             module_data = json.load(f)
 
-        # Create the output directory if specified and does not exist
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-
         # Process the submodules
         docs = self.process_module(module_data)
-
-        if output_dir:
-            self.save_output(output_dir)
             
         return docs
