@@ -46,7 +46,7 @@ function setupNavigation(blockIds) {
     let currentBlockIndex = 0;
 
     // Create the "Next" button
-    const nextButton = document.createElement("button");
+    const nextButton = document.createElement("nextButton");
     nextButton.textContent = "Next Highlight";
     nextButton.style.position = "fixed";
     nextButton.style.top = "20px";
@@ -79,7 +79,7 @@ function waitAndHighlightDiv(blockIds, timeout = 10000) {
         if (isSectionVisible()) {
             clearInterval(checkInterval); // Stop checking once the section is visible
             highlightBlocks(blockIds); // Highlight all blocks
-            setupNavigation(blockIds); // Setup navigation after highlighting blocks
+            setupNavigation(blockIds); // Setup navigation button
             scrollToDiv(blockIds[0]); // Scroll to the first block
         } else if (Date.now() - startTime >= timeout) {
             clearInterval(checkInterval); // Stop checking after timeout
@@ -88,9 +88,30 @@ function waitAndHighlightDiv(blockIds, timeout = 10000) {
     }, 500); // Check every 500ms
 }
 
-// Extract block IDs from the URL hash
-const blockIds = extractBlockIdsFromHash();
+// Clear navigation button
+function clearNavigation() {
+    // Remove the "Next" button if it exists
+    const nextButton = document.querySelector("nextButton");
+    if (nextButton) {
+        nextButton.remove();
+    }
+}
 
+
+// Since the page is a single-page application, we need to handle the case where the user navigates to a new lesson without refreshing the page.
+// Detect changes in the URL hash and clear previous highlights/navigation when a new lesson is loaded
+window.addEventListener("hashchange", () => {
+    clearNavigation();
+
+    // Just in case the user navigates to the old highlighted page using the browser's back/forward buttons
+    const blockIds = extractBlockIdsFromHash();
+    if (blockIds.length > 0) {
+        waitAndHighlightDiv(blockIds);
+    }
+});
+
+// Extract block IDs from the URL hash when the page first loads
+const blockIds = extractBlockIdsFromHash();
 if (blockIds.length > 0) {
     waitAndHighlightDiv(blockIds);
 }
