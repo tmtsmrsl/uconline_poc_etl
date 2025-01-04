@@ -154,7 +154,7 @@ class ContentMDFormatter:
                     "data_block_id": data_block_id,
                     "md_content": md_content,
                     "char_start": offset,
-                    "char_end": offset + char_length - 1
+                    "char_end": offset + char_length
                 })
                 offset += char_length
         
