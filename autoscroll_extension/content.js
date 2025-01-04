@@ -46,7 +46,7 @@ function setupNavigation(blockIds) {
     let currentBlockIndex = 0;
 
     // Create the "Next" button
-    const nextButton = document.createElement("nextButton");
+    const nextButton = document.createElement("button");
     nextButton.textContent = "Next Highlight";
     nextButton.style.position = "fixed";
     nextButton.style.top = "20px";
@@ -62,11 +62,11 @@ function setupNavigation(blockIds) {
     // Event listener to scroll to the next block when clicked
     nextButton.addEventListener("click", () => {
         if (blockIds.length > 0) {
-            // Scroll to the next block
-            scrollToDiv(blockIds[currentBlockIndex]);
-
             // Update the currentBlockIndex, looping back to the start if necessary
             currentBlockIndex = (currentBlockIndex + 1) % blockIds.length;
+
+            // Scroll to the next block
+            scrollToDiv(blockIds[currentBlockIndex]);
         }
     });
 }
@@ -96,7 +96,6 @@ function clearNavigation() {
         nextButton.remove();
     }
 }
-
 
 // Since the page is a single-page application, we need to handle the case where the user navigates to a new lesson without refreshing the page.
 // Detect changes in the URL hash and clear previous highlights/navigation when a new lesson is loaded
