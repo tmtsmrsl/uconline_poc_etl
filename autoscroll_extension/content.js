@@ -79,7 +79,7 @@ function waitAndHighlightDiv(blockIds, timeout = 10000) {
         if (isSectionVisible()) {
             clearInterval(checkInterval); // Stop checking once the section is visible
             highlightBlocks(blockIds); // Highlight all blocks
-            setupNavigation(blockIds); // Setup navigation button
+            if (blockIds.length > 1) setupNavigation(blockIds); // Setup navigation button if there are multiple blocks
             scrollToDiv(blockIds[0]); // Scroll to the first block
         } else if (Date.now() - startTime >= timeout) {
             clearInterval(checkInterval); // Stop checking after timeout
