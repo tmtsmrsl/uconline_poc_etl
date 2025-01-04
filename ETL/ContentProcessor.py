@@ -16,6 +16,30 @@ class CustomMDConverter(MarkdownConverter):
     """
     Inherit from MarkdownConverter to customize the conversion of HTML to Markdown.
     """
+    def convert_div(self, el, text, convert_as_inline):
+        """
+        Customize the conversion of container blocks div to pair of headers and content properly.
+        """
+        if "blocks-tabs__container" in el.get("class", []):
+            # Handle the main container
+            sections = []
+            headers = el.select('button[role="tab"]')
+            contents = el.select('div[role="tabpanel"]')
+
+            # Extract headers and content
+            for header, content in zip(headers, contents):
+                header_text = header.get_text(strip=True)
+                content_description = content.find("div", class_="blocks-tabs__description")
+                content_text = self.process_tag(content_description, convert_as_inline=False)
+                
+                # Format as Markdown
+                section_md = f"**{header_text}**{content_text}"
+                sections.append(section_md)
+            if sections:
+                return "\n".join(sections)
+        else:
+            return text
+            
     def convert_iframe(self, el, text, convert_as_inline):
         """
         Markdownify does not support iframe extraction. This method will preserve the iframe as HTML tags in the markdown content.
@@ -84,7 +108,7 @@ class ContentMDFormatter:
     """
     def __init__(self, submodule_html: str, excluded_elements_css: Optional[str] = None, **md_converter_options: Any) -> None:
         self.submodule_html = submodule_html
-        self.md_converter_options = {"heading_style": "html"}
+        self.md_converter_options = {"heading_style": "ATX"}
         self.md_converter_options.update(md_converter_options) 
         self.excluded_elements_css = excluded_elements_css
 
@@ -92,8 +116,8 @@ class ContentMDFormatter:
     def clean_spacing(text: str) -> str:
         """Strip excessive newlines and unnecessary spaces."""
         text = re.sub(r'\s*\n\s*', '\n', text)
-        text = re.sub(r'\n+', '\n\n', text)
-        text = re.sub(r'(\n\n>)+', '\n\n>', text)
+        text = re.sub(r'\n+', '\n', text)
+        text = re.sub(r'(\n\n>)+', '\n>', text)
         return text
 
     @staticmethod
@@ -123,7 +147,6 @@ class ContentMDFormatter:
         for div in lesson_block_divs:
             data_block_id = div.get('data-block-id', '')
             md_content = self._html_to_md(str(div))
-            
             # check if md_content contains characters other than whitespace
             if md_content.strip() != "":
                 char_length = len(md_content)
@@ -177,9 +200,7 @@ class ContentDocProcessor:
     
     def _split_text(self, combined_md: str) -> List[Document]:
         """Split combined Markdown content into smaller chunks based on token size."""
-        h_tags = ['<h1>', '<h2>', '<h3>']
-        whitespace_separators = ["\n\n\n\n", "\n\n", "\n", " ", ""]
-        separators = h_tags + whitespace_separators
+        separators = ["\n\n", "\n", " ", ""]
         
         text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             encoding_name=self.encoding_name,
@@ -212,13 +233,9 @@ class ContentDocProcessor:
     
     
     def _post_process_splits(self, lc_splits: List[Document], metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Post-process the splits, adding metadata, formatting content, and converting to dict format."""
+        """Post-process the splits, adding metadata and converting to dict format."""
         temp_splits = deepcopy(lc_splits)
         for split in temp_splits:
-            # Adding this prefix will help preserve the contextual information of the split
-            prefix = f"This is part of the lesson: {metadata['module_title']} - {metadata['subsection']}: {metadata['submodule_title']}\n\n"
-            split.page_content = f"{prefix}{split.page_content}"
-            split.metadata['prefix_len'] = len(prefix)
             split.metadata.update(metadata)
         
         # Convert Langchain document into dict format and remove unnecessary fields
