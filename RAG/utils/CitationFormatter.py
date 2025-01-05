@@ -1,5 +1,5 @@
 import re
-from typing import Dict
+from typing import Dict, List
 
 
 class CitationFormatter:
@@ -19,15 +19,14 @@ class CitationFormatter:
         pattern = r'(?:\[\d+\])+' 
         return re.sub(pattern, replace_consecutive, text)
     
-    def format_final_answer(self, result: Dict) -> Dict:
+    def format_final_answer(self, answer: str, source_metadata: List[Dict]) -> Dict:
         # extract the citation ids from the answer
         citation_pattern = re.compile(r"\^\[(\d+)\]")
-        citation_ids = citation_pattern.findall(result['answer'])
+        citation_ids = citation_pattern.findall(answer)
         citation_ids = set([int(id) for id in citation_ids])
 
         # find the source for each citation
         citation_data = []
-        source_metadata = result['formatted_sources']['source_dicts']
 
         for submodule_source in source_metadata:
             matching_ids = set(submodule_source['source_ids']).intersection(citation_ids)
@@ -53,7 +52,7 @@ class CitationFormatter:
             new_citation_id += 1
 
         # reformat the answer with the new citation ids
-        final_answer = result['answer']
+        final_answer = answer
         for citation in citation_data:
             for old_citation_id in citation['old_citation_ids']:
                 final_answer = final_answer.replace(f"^[{old_citation_id}]", f"[{citation['new_citation_id']}]")

@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import START, StateGraph
 from typing_extensions import Dict, List, TypedDict
+
 from RAG.utils.CitationFormatter import CitationFormatter
 from RAG.utils.SourceFormatter import SourceFormatter
 from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
@@ -11,6 +12,7 @@ class State(TypedDict):
     sources: List[Dict]
     formatted_sources: Dict
     answer: str
+    formatted_answer: Dict
 
 class PromptManager:
     @staticmethod
@@ -47,13 +49,16 @@ class QAPipeline():
         response = self.llm.invoke(messages)
         return {"answer": response.content}
     
+    def format_answer(self, state: State):
+        formatted_answer = self.citation_formatter.format_final_answer(state["answer"], state["formatted_sources"]['source_dicts'])
+        return {"formatted_answer": formatted_answer}
+        
     def build_graph(self):
-        graph_builder = StateGraph(State).add_sequence([self.retrieve, self.generate])
+        graph_builder = StateGraph(State).add_sequence([self.retrieve, self.generate, self.format_answer])
         graph_builder.add_edge(START, "retrieve")
         return graph_builder.compile()
     
     def run(self, query: str) -> Dict:
         result = self.graph.invoke({"question": query})
-        final_answer = self.citation_formatter.format_final_answer(result)
-        return final_answer
+        return result['formatted_answer']
         
