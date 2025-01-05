@@ -1,13 +1,15 @@
 import os
 
+import chainlit as cl
 import joblib
 import torch
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pymilvus.model.hybrid import BGEM3EmbeddingFunction
-from utils import ColBERTReranker, QAPipeline, ZillizVectorSearch
 
-import chainlit as cl
+from RAG.utils.ColBERTReranker import ColBERTReranker
+from RAG.utils.QAPipeline import QAPipeline
+from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
 
 
 @cl.on_chat_start
@@ -24,7 +26,7 @@ async def on_chat_start():
     COLLECTION_NAME = "emgt_605_bge_bm25_500_50"
 
     # The file path to load the sparse embeddings
-    SPARSE_EMBEDDINGS_PATH = "../artifact/emgt605/sparse_embeddings.joblib"
+    SPARSE_EMBEDDINGS_PATH = "artifact/emgt605/sparse_embeddings.joblib"
 
     # The name of ColBERT model that will be used as a reranker
     COLBERT_MODEL_NAME = "answerdotai/answerai-colbert-small-v1"
