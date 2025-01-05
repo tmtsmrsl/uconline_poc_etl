@@ -29,9 +29,15 @@ Note that if you are using Windows environment, you won't be able to run the cod
 4. Store the embeddings of the document dictionaries in a vector database. Please check the Section 2 of `ETL/vector_db_loading.ipynb` for an example. Note that I am using BGE-M3 for the dense embeddings, BM25 for the sparse embeddings, and Zilliz (cloud-managed Milvus) for the vector database. The trained sparse embeddings should be stored for future use.
 
 ## RAG 
+You can run the RAG pipeline either as a Chainlit app, which provides a chatbot interface for interaction, or as a FastAPI app if you only need a REST API endpoint. 
+
 Run the command below from the project root directory to start the Chainlit app on your local machine.
 ```bash
 python -m chainlit run RAG/chainlit/app.py -w
+```
+Run the command below from the project root directory to start the FastAPI app on your local machine.
+```bash
+uvicorn RAG.fastapi.main:app --reload
 ```
 
 ## Chrome Extension
