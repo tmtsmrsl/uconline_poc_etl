@@ -34,7 +34,6 @@ class SubmoduleScraper:
     """Scrape and process submodule."""
     
     def __init__(self) -> None:
-        self.submodule_data = []
         self.failed_submodules = []
 
     async def _scrape_submodule_content(self, submodule_url: str) -> str:
@@ -74,14 +73,14 @@ class SubmoduleScraper:
     async def process_submodules(self, submodule_urls: List[str], concurrency_limit: int = 5) -> None:
         """Processes a list of submodules concurrently."""
         tasks = [self._process_submodule(url) for url in submodule_urls]
-        self.submodule_data = await gather_with_concurrency(concurrency_limit, *tasks)
+        submodule_data = await gather_with_concurrency(concurrency_limit, *tasks)
+        return submodule_data
 
 class ModuleScraper:
     """Scrapes and process module along with its submodules."""
 
     def __init__(self) -> None:
         self.submodule_scraper = SubmoduleScraper()
-        self.module_data = []
         self.failed_modules = []
 
     async def _scrape_module_structure(self, module_url: str) -> Dict[str, Any]:
@@ -141,14 +140,13 @@ class ModuleScraper:
 
         # Process submodules concurrently
         submodule_urls = [urljoin(module_url, submodule['url']) for submodule in module_structure['submodule_data']]
-        await self.submodule_scraper.process_submodules(submodule_urls, concurrency_limit)
-        processed_submodules = self.submodule_scraper.submodule_data
+        processed_submodules = await self.submodule_scraper.process_submodules(submodule_urls, concurrency_limit)
         
         # Collect results
         for i, result in enumerate(processed_submodules):
             module_structure['submodule_data'][i]['html_content'] = result
 
-        self.module_data.append(module_structure)
+        return module_structure
         
     @staticmethod
     def _load_input(input_json: str) -> List[str]:
@@ -163,30 +161,34 @@ class ModuleScraper:
             except json.JSONDecodeError:
                 raise ValueError("Invalid JSON file.")
 
-    def save_output(self, output_dir: str) -> None:
+    @staticmethod
+    def save_output(module_data: List[Dict[str, Any]],
+                    output_dir: str) -> None:
         """Saves the output data to a JSON file."""
-        for module in self.module_data:
-            module_name = module['module_title']
-            output_filename = sanitize_filename(module_name)
-            output_path = os.path.join(output_dir, f"{output_filename}.json")
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(module, f, indent=4, ensure_ascii=False)
-            print(f"Results saved to {output_path}.")
+        module_name = module_data['module_title']
+        output_filename = sanitize_filename(module_name)
+        output_path = os.path.join(output_dir, f"{output_filename}.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(module_data, f, indent=4, ensure_ascii=False)
+        print(f"Results saved to {output_path}.")
     
     async def run(self, input_json: str, output_dir: Optional[str] = None, concurrency_limit: int = 5) -> None:
         """Runs the scraping process for all modules."""
         module_urls = self._load_input(input_json)
-
+        all_module_data = []
+        
         # Create the output directory if specified and does not exist
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
 
         # Process modules sequentially
         for module_url in module_urls:
-            await self.process_module(module_url, concurrency_limit)
-
-        if output_dir:
-            self.save_output(output_dir)
+            module_data = await self.process_module(module_url, concurrency_limit)
+            all_module_data.append(module_data)
+            if output_dir:
+                self.save_output(module_data, output_dir)
+        
+        return all_module_data
 
 def main():
     # Parse command-line arguments
