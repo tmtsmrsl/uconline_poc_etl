@@ -61,8 +61,8 @@ async def send_initial_message():
     """Send an initial welcome message to the user."""
     session_config = cl.user_session.get("session_config")
     message_content = (
-        f"""Hi, I am UCOnline AI Assistant which can help you learn about {session_config['COURSE_NAME']}.
-            Ask me anything related to the course, and I will try to answer based on the course materials!"""
+        f"Hi, I am UCOnline AI Assistant which can help you learn about {session_config['COURSE_NAME']}. " 
+        "Ask me anything related to the course, and I will try to answer based on the course content!"
     )
     msg = cl.Message(content=message_content)
     await msg.send()

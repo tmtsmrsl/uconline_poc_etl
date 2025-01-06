@@ -31,14 +31,38 @@ Note that if you are using Windows environment, you won't be able to run the cod
 ## RAG 
 You can run the RAG pipeline either as a Chainlit app, which provides a chatbot interface for interaction, or as a FastAPI app if you only need a REST API endpoint. 
 
+#### Chainlit app
 Run the command below from the project root directory to start the Chainlit app on your local machine.
 ```bash
 python -m chainlit run RAG/chainlit/app.py -w
 ```
+
+By default, the Chainlit app will run on `http://localhost:8000`.
+
+#### FastAPI endpoint
 Run the command below from the project root directory to start the FastAPI app on your local machine.
 ```bash
 uvicorn RAG.fastapi.main:app --reload
 ```
+
+Example request to the FastAPI endpoint:
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/ask' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "How can we support indigenous sustainability?"
+  }'
+```
+
+Architecture of the RAG pipeline:  
+
+![image](https://github.com/user-attachments/assets/b8d5e64e-f4e2-497e-9640-29f8b2584375)
+
+1. Guardrail: Use LLM to filter out questions that violate the pre-defined guardrail criteria.
+2. Retrieve: Retrieve the relevant documents from the vector database, combining results from both dense and sparse embeddings. These documents are then further reranked using the ColBERT model to ensure high-quality retrieval results. The retrieved documents are split based on the lesson blocks of the submodule content and formatted with an intermediate ID so the LLM can easily refer to it in step 3.
+3. Generate: Use LLM to generate an answer with inline citation based on the documents retrieved from step 2 and the user’s question.
+4. Format Answer: Refines the generated answer by reformatting the intermediate IDs and linking them to the original sources, ensuring traceability. Questions filtered out in step 1 still go through this step to ensure a consistent format for the final answer.
 
 ## Chrome Extension
 Rise Autoscroller is a chrome extension that can be used to automatically scroll through the relevant parts of the submodule content which is cited in the chatbot response. The extension is available on `autoscroll_extension` directory. To install the extension, follow the steps below:
