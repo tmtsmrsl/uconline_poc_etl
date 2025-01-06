@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional
@@ -8,6 +9,17 @@ from urllib.parse import urljoin
 
 from playwright.async_api import async_playwright
 
+# Set up logging
+log_filename = "course_scraper.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_filename, mode='a'),  # Append logs to the file
+        logging.StreamHandler()  # Print logs to console
+    ]
+)
+logger = logging.getLogger(__name__)
 
 async def gather_with_concurrency(concurrency_limit: int = 5, *tasks: asyncio.Future) -> List[Any]:
     """Asynchronously gather tasks with a concurrency limit."""
@@ -33,9 +45,6 @@ def sanitize_filename(name: str) -> str:
 class SubmoduleScraper:
     """Scrape and process submodule."""
     
-    def __init__(self) -> None:
-        self.failed_submodules = []
-
     async def _scrape_submodule_content(self, submodule_url: str) -> str:
         """Scrapes the main content of a given submodule URL."""
         async with async_playwright() as p:
@@ -61,12 +70,11 @@ class SubmoduleScraper:
 
     async def _process_submodule(self, submodule_url: str) -> Optional[str]:
         """Processes a single submodule by scraping its main content."""
-        print(f"-- Scraping content of {submodule_url}")
         try:
             html_content = await self._scrape_submodule_content(submodule_url)
+            logger.info(f"Successfully scraped content for {submodule_url}")
         except Exception as e:
-            print(f"-- Error scraping content for {submodule_url}: {e}")
-            self.failed_submodules.append(submodule_url)  # Log failed submodule
+            logger.error(f"Error scraping content for {submodule_url}: {e}")
             html_content = None
         return html_content
     
@@ -81,7 +89,6 @@ class ModuleScraper:
 
     def __init__(self) -> None:
         self.submodule_scraper = SubmoduleScraper()
-        self.failed_modules = []
 
     async def _scrape_module_structure(self, module_url: str) -> Dict[str, Any]:
         """Scrapes the module title, sections, and submodule URLs from a module URL."""
@@ -130,13 +137,12 @@ class ModuleScraper:
             
     async def process_module(self, module_url: str, concurrency_limit: int) -> Optional[Dict[str, Any]]:
         """Processes a single module by scraping its metadata and submodules."""
-        print(f"Scraping submodules of {module_url}")
         try:
             module_structure = await self._scrape_module_structure(module_url)
+            logger.info(f"Successfully scraped submodule URLs for {module_url}")
         except Exception as e:
-            print(f"Error scraping submodule URLs for {module_url}: {e}")
-            self.failed_modules.append(module_url)  # Log failed module
-            return # Stop processing this module
+            logger.error(f"Error scraping submodule URLs for {module_url}: {e}")
+            return  # Stop processing this module
 
         # Process submodules concurrently
         submodule_urls = [urljoin(module_url, submodule['url']) for submodule in module_structure['submodule_data']]
@@ -162,7 +168,7 @@ class ModuleScraper:
                 raise ValueError("Invalid JSON file.")
 
     @staticmethod
-    def save_output(module_data: List[Dict[str, Any]],
+    def save_output(module_data: Dict[str, Any],
                     output_dir: str) -> None:
         """Saves the output data to a JSON file."""
         module_name = module_data['module_title']
@@ -170,7 +176,7 @@ class ModuleScraper:
         output_path = os.path.join(output_dir, f"{output_filename}.json")
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(module_data, f, indent=4, ensure_ascii=False)
-        print(f"Results saved to {output_path}.")
+        logger.info(f"Results saved to {output_path}.")
     
     async def run(self, input_json: str, output_dir: Optional[str] = None, concurrency_limit: int = 5) -> List[Dict[str, Any]]:
         """Runs the scraping process for all modules."""
@@ -184,9 +190,10 @@ class ModuleScraper:
         # Process modules sequentially
         for module_url in module_urls:
             module_data = await self.process_module(module_url, concurrency_limit)
-            all_module_data.append(module_data)
-            if output_dir:
-                self.save_output(module_data, output_dir)
+            if module_data:
+                all_module_data.append(module_data)
+                if output_dir:
+                    self.save_output(module_data, output_dir)
         
         return all_module_data
 
