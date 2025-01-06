@@ -70,7 +70,7 @@ class SubmoduleScraper:
             html_content = None
         return html_content
     
-    async def process_submodules(self, submodule_urls: List[str], concurrency_limit: int = 5) -> None:
+    async def process_submodules(self, submodule_urls: List[str], concurrency_limit: int = 5) -> List[Optional[str]]:
         """Processes a list of submodules concurrently."""
         tasks = [self._process_submodule(url) for url in submodule_urls]
         submodule_data = await gather_with_concurrency(concurrency_limit, *tasks)
@@ -128,7 +128,7 @@ class ModuleScraper:
                 "submodule_data": submodule_data
             }
             
-    async def process_module(self, module_url: str, concurrency_limit: int) -> None:
+    async def process_module(self, module_url: str, concurrency_limit: int) -> Optional[Dict[str, Any]]:
         """Processes a single module by scraping its metadata and submodules."""
         print(f"Scraping submodules of {module_url}")
         try:
@@ -172,7 +172,7 @@ class ModuleScraper:
             json.dump(module_data, f, indent=4, ensure_ascii=False)
         print(f"Results saved to {output_path}.")
     
-    async def run(self, input_json: str, output_dir: Optional[str] = None, concurrency_limit: int = 5) -> None:
+    async def run(self, input_json: str, output_dir: Optional[str] = None, concurrency_limit: int = 5) -> List[Dict[str, Any]]:
         """Runs the scraping process for all modules."""
         module_urls = self._load_input(input_json)
         all_module_data = []
