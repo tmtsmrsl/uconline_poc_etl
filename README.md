@@ -20,7 +20,7 @@ playwright install
 ```
 Then run the CourseScraper.py script with the input JSON file and the output directory as arguments.
 ```bash
-python ETL/CourseScraper.py --input_json artifact/emgt605/module_urls.json --ouput_dir artifact/emgt605/module_content
+python ETL/CourseScraper.py --input_json artifact/emgt605/module_urls.json --output_dir artifact/emgt605/module_content
 ```
 Note that if you are using Windows environment, you won't be able to run the code in Jupyter Notebook because of the Playwright incompatibility with the Windows event loop policy.
 

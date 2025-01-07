@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional
@@ -8,6 +9,17 @@ from urllib.parse import urljoin
 
 from playwright.async_api import async_playwright
 
+# Set up logging
+log_filename = "course_scraper.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_filename, mode='a'),  # Append logs to the file
+        logging.StreamHandler()  # Print logs to console
+    ]
+)
+logger = logging.getLogger(__name__)
 
 async def gather_with_concurrency(concurrency_limit: int = 5, *tasks: asyncio.Future) -> List[Any]:
     """Asynchronously gather tasks with a concurrency limit."""
@@ -33,10 +45,6 @@ def sanitize_filename(name: str) -> str:
 class SubmoduleScraper:
     """Scrape and process submodule."""
     
-    def __init__(self) -> None:
-        self.submodule_data = []
-        self.failed_submodules = []
-
     async def _scrape_submodule_content(self, submodule_url: str) -> str:
         """Scrapes the main content of a given submodule URL."""
         async with async_playwright() as p:
@@ -62,27 +70,25 @@ class SubmoduleScraper:
 
     async def _process_submodule(self, submodule_url: str) -> Optional[str]:
         """Processes a single submodule by scraping its main content."""
-        print(f"-- Scraping content of {submodule_url}")
         try:
             html_content = await self._scrape_submodule_content(submodule_url)
+            logger.info(f"Successfully scraped content for {submodule_url}")
         except Exception as e:
-            print(f"-- Error scraping content for {submodule_url}: {e}")
-            self.failed_submodules.append(submodule_url)  # Log failed submodule
+            logger.error(f"Error scraping content for {submodule_url}: {e}")
             html_content = None
         return html_content
     
-    async def process_submodules(self, submodule_urls: List[str], concurrency_limit: int = 5) -> None:
+    async def process_submodules(self, submodule_urls: List[str], concurrency_limit: int = 5) -> List[Optional[str]]:
         """Processes a list of submodules concurrently."""
         tasks = [self._process_submodule(url) for url in submodule_urls]
-        self.submodule_data = await gather_with_concurrency(concurrency_limit, *tasks)
+        submodule_data = await gather_with_concurrency(concurrency_limit, *tasks)
+        return submodule_data
 
 class ModuleScraper:
     """Scrapes and process module along with its submodules."""
 
     def __init__(self) -> None:
         self.submodule_scraper = SubmoduleScraper()
-        self.module_data = []
-        self.failed_modules = []
 
     async def _scrape_module_structure(self, module_url: str) -> Dict[str, Any]:
         """Scrapes the module title, sections, and submodule URLs from a module URL."""
@@ -129,26 +135,24 @@ class ModuleScraper:
                 "submodule_data": submodule_data
             }
             
-    async def process_module(self, module_url: str, concurrency_limit: int) -> None:
+    async def process_module(self, module_url: str, concurrency_limit: int) -> Optional[Dict[str, Any]]:
         """Processes a single module by scraping its metadata and submodules."""
-        print(f"Scraping submodules of {module_url}")
         try:
             module_structure = await self._scrape_module_structure(module_url)
+            logger.info(f"Successfully scraped submodule URLs for {module_url}")
         except Exception as e:
-            print(f"Error scraping submodule URLs for {module_url}: {e}")
-            self.failed_modules.append(module_url)  # Log failed module
-            return # Stop processing this module
+            logger.error(f"Error scraping submodule URLs for {module_url}: {e}")
+            return  # Stop processing this module
 
         # Process submodules concurrently
         submodule_urls = [urljoin(module_url, submodule['url']) for submodule in module_structure['submodule_data']]
-        await self.submodule_scraper.process_submodules(submodule_urls, concurrency_limit)
-        processed_submodules = self.submodule_scraper.submodule_data
+        processed_submodules = await self.submodule_scraper.process_submodules(submodule_urls, concurrency_limit)
         
         # Collect results
         for i, result in enumerate(processed_submodules):
             module_structure['submodule_data'][i]['html_content'] = result
 
-        self.module_data.append(module_structure)
+        return module_structure
         
     @staticmethod
     def _load_input(input_json: str) -> List[str]:
@@ -163,30 +167,36 @@ class ModuleScraper:
             except json.JSONDecodeError:
                 raise ValueError("Invalid JSON file.")
 
-    def save_output(self, output_dir: str) -> None:
+    @staticmethod
+    def save_output(module_data: Dict[str, Any],
+                    output_dir: str) -> None:
         """Saves the output data to a JSON file."""
-        for module in self.module_data:
-            module_name = module['module_title']
-            output_filename = sanitize_filename(module_name)
-            output_path = os.path.join(output_dir, f"{output_filename}.json")
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(module, f, indent=4, ensure_ascii=False)
-            print(f"Results saved to {output_path}.")
+        module_name = module_data['module_title']
+        output_filename = sanitize_filename(module_name)
+        output_path = os.path.join(output_dir, f"{output_filename}.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(module_data, f, indent=4, ensure_ascii=False)
+        logger.info(f"Results saved to {output_path}.")
     
-    async def run(self, input_json: str, output_dir: Optional[str] = None, concurrency_limit: int = 5) -> None:
+    async def run(self, input_json: str, output_dir: Optional[str] = None, concurrency_limit: int = 5) -> List[Dict[str, Any]]:
         """Runs the scraping process for all modules."""
         module_urls = self._load_input(input_json)
-
+        all_module_data = []
+        
         # Create the output directory if specified and does not exist
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
+            logger.info(f"Created output directory: {output_dir}")
 
         # Process modules sequentially
         for module_url in module_urls:
-            await self.process_module(module_url, concurrency_limit)
-
-        if output_dir:
-            self.save_output(output_dir)
+            module_data = await self.process_module(module_url, concurrency_limit)
+            if module_data:
+                all_module_data.append(module_data)
+                if output_dir:
+                    self.save_output(module_data, output_dir)
+        
+        return all_module_data
 
 def main():
     # Parse command-line arguments

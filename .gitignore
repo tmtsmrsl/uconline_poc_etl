@@ -6,3 +6,4 @@ __pycache__
 artifact
 .files
 artifact
+*.log
