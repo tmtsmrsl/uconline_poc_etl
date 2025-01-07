@@ -186,6 +186,7 @@ class ModuleScraper:
         # Create the output directory if specified and does not exist
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
+            logger.info(f"Created output directory: {output_dir}")
 
         # Process modules sequentially
         for module_url in module_urls:
