@@ -167,6 +167,9 @@ class EchoTranscriptScraper:
             if echo_urls:
                 submodule_transcript_metadatas = await self.scrape_transcripts(echo_urls, output_dir, concurrency_limit)
                 module_transcript_metadatas.append({   
+                    "module_title": module_title,
+                    "subsection": submodule['subsection'],
+                    "submodule_title": submodule['title'],
                     "submodule_url": submodule['submodule_url'],
                     "transcript_metadatas": submodule_transcript_metadatas
                 })
@@ -229,6 +232,9 @@ class YoutubeTranscriptExtractor:
                     
             if submodule_transcript_metadatas:
                 module_transcript_metadatas.append({
+                    "module_title": module_title,
+                    "subsection": submodule['subsection'],
+                    "submodule_title": submodule['title'],
                     "submodule_url": submodule['submodule_url'],
                     "transcript_metadatas": submodule_transcript_metadatas
                 })
@@ -344,3 +350,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Example command from root project directory:
+    # python ETL/VideoScraper.py --input "artifact/emgt605/module_content" --youtube-output-dir "artifact/emgt605/youtube" --echo360-output-dir "artifact/emgt605/echo360" --concurrency-limit 5
