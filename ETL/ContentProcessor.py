@@ -184,65 +184,6 @@ class ContentDocProcessor:
     def _combine_blocks(self, lesson_blocks: List[Dict[str, Any]]) -> str:
         """Combine lesson blocks into a single Markdown string."""
         return "".join(block['md_content'] for block in lesson_blocks)
-    
-    # def _add_overlap(self, doc_splits: List[Document], chunk_token_overlap: int) -> List[Document]:
-    #     """Adds overlapping tokens to preserve flow when splitting documents."""
-    #     encoding = tiktoken.get_encoding(self.encoding_name)
-    #     overlap_from_prev = ""
-    #     for split in doc_splits:
-    #         current_chunk = split.page_content
-    #         split.page_content = overlap_from_prev + current_chunk
-    #         split.metadata['start_index'] -= len(overlap_from_prev)
-    #         current_chunk_tokens = encoding.encode(current_chunk)
-    #         overlap_from_prev = encoding.decode(current_chunk_tokens[-chunk_token_overlap:])
-            
-    #     return doc_splits
-    
-    # def _split_text(self, combined_md: str) -> List[Document]:
-    #     """Split combined Markdown content into smaller chunks based on token size."""
-    #     separators = ["\n\n", "\n", " ", ""]
-        
-    #     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-    #         encoding_name=self.encoding_name,
-    #         chunk_size=self.chunk_token_size,
-    #         # we don't want to rely on the chunk overlap of the text splitter
-    #         chunk_overlap=0,
-    #         separators=separators,
-    #         strip_whitespace=False,
-    #         add_start_index=True
-    #     )
-
-    #     doc_splits = text_splitter.create_documents([combined_md])
-    #     doc_splits = self._add_overlap(doc_splits, self.chunk_token_overlap)
-    #     return doc_splits
-    
-    # @staticmethod
-    # def _convert_lc_doc_to_dict(lc_doc: Document) -> Dict[str, Any]:
-    #     """Convert Langchain document into dict format."""
-    #     doc_dict = lc_doc.dict()
-        
-    #     for k, v in doc_dict['metadata'].items():
-    #         doc_dict[k] = v
-        
-    #     doc_dict['text'] = doc_dict.pop('page_content')
-    #     doc_dict.pop('id', None)
-    #     doc_dict.pop('type', None)
-    #     doc_dict.pop('metadata', None)
-        
-    #     return doc_dict
-    
-    
-    # def _post_process_splits(self, doc_splits: List[Document], metadata: Dict[str, Any]) -> List[Dict[str, Any]] | List[Document]:
-    #     """Post-process the splits, adding metadata and optionally convert to dict format."""
-    #     temp_splits = deepcopy(doc_splits)
-    #     for split in temp_splits:
-    #         split.metadata.update(metadata)
-        
-    #     if self.return_dict:
-    #         temp_splits = [split.dict() for split in temp_splits]
-    #         [split.pop('id', None) for split in temp_splits]
-            
-    #     return temp_splits
 
     def _process_submodule(self, submodule: Dict[str, Any], module_title: str) -> Dict[str, Any]:
         """Process lesson blocks for a submodule into document splits."""

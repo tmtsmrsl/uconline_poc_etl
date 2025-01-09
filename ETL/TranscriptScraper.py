@@ -310,6 +310,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-    # Example command from root project directory:
-    # python ETL/TranscriptScraper.py --input "artifact/emgt605/module_content" --output-dir "artifact/emgt605/transcripts" --concurrency-limit 5
