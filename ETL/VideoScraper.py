@@ -210,10 +210,10 @@ class VideoScraper:
         submodule_iframes = self.iframe_extractor.extract_submodule_iframes(submodule_data)
         
         youtube_transcript_metadatas = self.youtube_transcript_extractor.process_submodule_iframes(submodule_iframes, youtube_output_dir)
-        submodule_metadata['youtube_metadata'] = youtube_transcript_metadatas
+        submodule_metadata['youtube_metadatas'] = youtube_transcript_metadatas
         
         echo_transcript_metadatas = await self.echo_transcript_scraper.process_submodule_iframes(submodule_iframes, echo360_output_dir)
-        submodule_metadata['echo360_metadata'] = echo_transcript_metadatas
+        submodule_metadata['echo360_metadatas'] = echo_transcript_metadatas
         
         return submodule_metadata
         
@@ -312,4 +312,4 @@ if __name__ == "__main__":
     main()
     
     # Example command from root project directory:
-    # python ETL/VideoScraper.py --input "artifact/emgt605/module_content" --output-dir "artifact/emgt605/videos" --concurrency-limit 5
+    # python ETL/VideoScraper.py --input "artifact/emgt605/module_content" --output-dir "artifact/emgt605/transcripts" --concurrency-limit 5
