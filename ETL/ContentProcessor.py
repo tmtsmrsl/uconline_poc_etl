@@ -8,8 +8,9 @@ from typing import Any, Dict, List, Optional
 import tiktoken
 from bs4 import BeautifulSoup
 from langchain_core.documents.base import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from markdownify import MarkdownConverter
+
+from ETL.RecursiveTextSplitter import RecursiveTextSplitter
 
 
 class CustomMDConverter(MarkdownConverter):
@@ -106,10 +107,11 @@ class ContentMDFormatter:
     """
     Class to format submodule content from HTML to Markdown.
     """
-    def __init__(self, submodule_html: str, excluded_elements_css: Optional[str] = None, **md_converter_options: Any) -> None:
+    def __init__(self, submodule_html: str, excluded_elements_css: Optional[str] = None, md_converter_options: Optional[dict] = None) -> None:
         self.submodule_html = submodule_html
         self.md_converter_options = {"heading_style": "ATX"}
-        self.md_converter_options.update(md_converter_options) 
+        if md_converter_options:
+            self.md_converter_options.update(md_converter_options)
         self.excluded_elements_css = excluded_elements_css
 
     @staticmethod
@@ -133,8 +135,7 @@ class ContentMDFormatter:
         processed_html = html_processor.get_html()
         
         # Convert the processed HTML content to Markdown
-        md_converter = CustomMDConverter(**self.md_converter_options)
-        md_content = md_converter.convert(processed_html)
+        md_content = CustomMDConverter(**self.md_converter_options).convert(processed_html)
         md_content = self.clean_spacing(md_content)
         md_content = self.clean_unicode_char(md_content)
         return md_content
@@ -175,47 +176,45 @@ class ContentDocProcessor:
     Class to process course content from HTML to documents (a native dict or Langchain Document with content and metadata), which will be used for embedding.
     """
 
-    def __init__(self, excluded_elements_css: Optional[str] = None, chunk_token_size: int = 500, chunk_token_overlap: int = 50, encoding_name: str = "o200k_base", return_dict: bool = False) -> None:
+    def __init__(self, text_splitter_options: Optional[dict] = None, excluded_elements_css: Optional[str] = None, return_dict: bool = False) -> None:
+        self.text_splitter_options = text_splitter_options
         self.excluded_elements_css = excluded_elements_css
-        self.encoding_name = encoding_name
-        self.chunk_token_size = chunk_token_size
-        self.chunk_token_overlap = chunk_token_overlap
         self.return_dict = return_dict
 
     def _combine_blocks(self, lesson_blocks: List[Dict[str, Any]]) -> str:
         """Combine lesson blocks into a single Markdown string."""
         return "".join(block['md_content'] for block in lesson_blocks)
     
-    def _add_overlap(self, doc_splits: List[Document], chunk_token_overlap: int) -> List[Document]:
-        """Adds overlapping tokens to preserve flow when splitting documents."""
-        encoding = tiktoken.get_encoding(self.encoding_name)
-        overlap_from_prev = ""
-        for split in doc_splits:
-            current_chunk = split.page_content
-            split.page_content = overlap_from_prev + current_chunk
-            split.metadata['start_index'] -= len(overlap_from_prev)
-            current_chunk_tokens = encoding.encode(current_chunk)
-            overlap_from_prev = encoding.decode(current_chunk_tokens[-chunk_token_overlap:])
+    # def _add_overlap(self, doc_splits: List[Document], chunk_token_overlap: int) -> List[Document]:
+    #     """Adds overlapping tokens to preserve flow when splitting documents."""
+    #     encoding = tiktoken.get_encoding(self.encoding_name)
+    #     overlap_from_prev = ""
+    #     for split in doc_splits:
+    #         current_chunk = split.page_content
+    #         split.page_content = overlap_from_prev + current_chunk
+    #         split.metadata['start_index'] -= len(overlap_from_prev)
+    #         current_chunk_tokens = encoding.encode(current_chunk)
+    #         overlap_from_prev = encoding.decode(current_chunk_tokens[-chunk_token_overlap:])
             
-        return doc_splits
+    #     return doc_splits
     
-    def _split_text(self, combined_md: str) -> List[Document]:
-        """Split combined Markdown content into smaller chunks based on token size."""
-        separators = ["\n\n", "\n", " ", ""]
+    # def _split_text(self, combined_md: str) -> List[Document]:
+    #     """Split combined Markdown content into smaller chunks based on token size."""
+    #     separators = ["\n\n", "\n", " ", ""]
         
-        text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-            encoding_name=self.encoding_name,
-            chunk_size=self.chunk_token_size,
-            # we don't want to rely on the chunk overlap of the text splitter
-            chunk_overlap=0,
-            separators=separators,
-            strip_whitespace=False,
-            add_start_index=True
-        )
+    #     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+    #         encoding_name=self.encoding_name,
+    #         chunk_size=self.chunk_token_size,
+    #         # we don't want to rely on the chunk overlap of the text splitter
+    #         chunk_overlap=0,
+    #         separators=separators,
+    #         strip_whitespace=False,
+    #         add_start_index=True
+    #     )
 
-        doc_splits = text_splitter.create_documents([combined_md])
-        doc_splits = self._add_overlap(doc_splits, self.chunk_token_overlap)
-        return doc_splits
+    #     doc_splits = text_splitter.create_documents([combined_md])
+    #     doc_splits = self._add_overlap(doc_splits, self.chunk_token_overlap)
+    #     return doc_splits
     
     # @staticmethod
     # def _convert_lc_doc_to_dict(lc_doc: Document) -> Dict[str, Any]:
@@ -233,17 +232,17 @@ class ContentDocProcessor:
     #     return doc_dict
     
     
-    def _post_process_splits(self, doc_splits: List[Document], metadata: Dict[str, Any]) -> List[Dict[str, Any]] | List[Document]:
-        """Post-process the splits, adding metadata and optionally convert to dict format."""
-        temp_splits = deepcopy(doc_splits)
-        for split in temp_splits:
-            split.metadata.update(metadata)
+    # def _post_process_splits(self, doc_splits: List[Document], metadata: Dict[str, Any]) -> List[Dict[str, Any]] | List[Document]:
+    #     """Post-process the splits, adding metadata and optionally convert to dict format."""
+    #     temp_splits = deepcopy(doc_splits)
+    #     for split in temp_splits:
+    #         split.metadata.update(metadata)
         
-        if self.return_dict:
-            temp_splits = [split.dict() for split in temp_splits]
-            [split.pop('id', None) for split in temp_splits]
+    #     if self.return_dict:
+    #         temp_splits = [split.dict() for split in temp_splits]
+    #         [split.pop('id', None) for split in temp_splits]
             
-        return temp_splits
+    #     return temp_splits
 
     def _process_submodule(self, submodule: Dict[str, Any], module_title: str) -> Dict[str, Any]:
         """Process lesson blocks for a submodule into document splits."""
@@ -265,8 +264,9 @@ class ContentDocProcessor:
         combined_md = self._combine_blocks(md_lesson_blocks)
         
         # Update submodule with lesson blocks and document splits
+        text_splitter = RecursiveTextSplitter(**self.text_splitter_options)
         temp_submodule['md_lesson_blocks'] = md_lesson_blocks
-        temp_submodule['doc_splits'] = self._split_text(combined_md)
+        temp_submodule['doc_splits'] = text_splitter.split_text(combined_md)
         
         metadata = {
             "index_metadata": data_block_ranges,
@@ -277,7 +277,7 @@ class ContentDocProcessor:
         }
         
         # Post-process splits (formatting, metadata, optional dict conversion)
-        temp_submodule['doc_splits'] = self._post_process_splits(temp_submodule['doc_splits'], metadata)
+        temp_submodule['doc_splits'] = text_splitter.post_process_splits(temp_submodule['doc_splits'], metadata, self.return_dict)
         
         return temp_submodule
     
