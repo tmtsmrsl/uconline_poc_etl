@@ -145,8 +145,8 @@ class EchoTranscriptScraper:
             submodule_transcript_metadatas.extend(await self.scrape_transcripts(echo_urls, output_dir, concurrency_limit))
         return submodule_transcript_metadatas
     
-class YoutubeTranscriptExtractor:
-    """Extract YouTube video transcripts."""
+class YoutubeTranscriptScraper:
+    """Scrape YouTube video transcripts."""
     @staticmethod
     def _extract_youtube_embed_url(url: str) -> str:
         """Extract the youtube URL from an embed URL."""
@@ -155,7 +155,7 @@ class YoutubeTranscriptExtractor:
         video_url = query_params.get('url', None)[0]
         return video_url
     
-    def extract_transcript(self, youtube_embed_url: str, title: str, output_dir: str) -> Dict[str, str]:
+    def scrape_transcript(self, youtube_embed_url: str, title: str, output_dir: str) -> Dict[str, str]:
         """Get the transcripts of multiple YouTube videos."""
         try:
             youtube_url = self._extract_youtube_embed_url(youtube_embed_url)
@@ -176,7 +176,7 @@ class YoutubeTranscriptExtractor:
             }
             
         except Exception as e:
-            logger.error(f"Error extracting transcript from YouTube URL: {youtube_embed_url}: {e}")
+            logger.error(f"Error scraping transcript from YouTube URL: {youtube_embed_url}: {e}")
             return {
                 "title": title,
                 "url": youtube_url,
@@ -188,18 +188,18 @@ class YoutubeTranscriptExtractor:
         submodule_transcript_metadatas = []
         for iframe in submodule_iframes:
             if "youtube" in iframe['url']:
-                transcript_metadata = self.extract_transcript(iframe['url'], iframe['title'], output_dir)
+                transcript_metadata = self.scrape_transcript(iframe['url'], iframe['title'], output_dir)
                 submodule_transcript_metadatas.append(transcript_metadata)
         
         return submodule_transcript_metadatas
         
-class VideoScraper:
-    """Extract the video iframes in a course content and get their transcripts."""
+class TranscriptScraper:
+    """Extract the video iframes in a course content and scrape their transcripts."""
     
     def __init__(self) -> None:
         self.iframe_extractor = IframeExtractor()
         self.echo_transcript_scraper = EchoTranscriptScraper()
-        self.youtube_transcript_extractor = YoutubeTranscriptExtractor()
+        self.youtube_transcript_scraper = YoutubeTranscriptScraper()
     async def process_submodule(self, submodule_data: Dict[str, Any], youtube_output_dir: str, echo360_output_dir: str) -> Dict[str, Any]:
         submodule_metadata = {
                     "submodule_title": submodule_data['title'],
@@ -209,7 +209,7 @@ class VideoScraper:
                 
         submodule_iframes = self.iframe_extractor.extract_submodule_iframes(submodule_data)
         
-        youtube_transcript_metadatas = self.youtube_transcript_extractor.process_submodule_iframes(submodule_iframes, youtube_output_dir)
+        youtube_transcript_metadatas = self.youtube_transcript_scraper.process_submodule_iframes(submodule_iframes, youtube_output_dir)
         submodule_metadata['youtube_metadatas'] = youtube_transcript_metadatas
         
         echo_transcript_metadatas = await self.echo_transcript_scraper.process_submodule_iframes(submodule_iframes, echo360_output_dir)
@@ -292,7 +292,7 @@ def main():
         parser.error(f"Input path is neither a file nor a directory: {args.input}")
 
     # Process each JSON file
-    video_processor = VideoScraper()
+    ts = TranscriptScraper()
     for json_file in json_files:
         logger.info(f"Processing file: {json_file}")
 
@@ -303,7 +303,7 @@ def main():
         module_name = os.path.splitext(os.path.basename(json_file))[0]
         
         # Process the module
-        asyncio.run(video_processor.process_module(
+        asyncio.run(ts.process_module(
             module_data,
             output_dir=os.path.join(args.output_dir, module_name)
         ))
@@ -312,4 +312,4 @@ if __name__ == "__main__":
     main()
     
     # Example command from root project directory:
-    # python ETL/VideoScraper.py --input "artifact/emgt605/module_content" --output-dir "artifact/emgt605/transcripts" --concurrency-limit 5
+    # python ETL/TranscriptScraper.py --input "artifact/emgt605/module_content" --output-dir "artifact/emgt605/transcripts" --concurrency-limit 5
