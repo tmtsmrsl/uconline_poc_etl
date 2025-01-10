@@ -84,8 +84,7 @@ class TranscriptDocProcessor:
     def __init__(self, text_splitter_options: Optional[dict] = None, return_dict: bool = False, punctuation_model_name: str = "kredor/punctuate-all") -> None:
         self.text_splitter_options = text_splitter_options
         self.return_dict = return_dict
-        self.punctuation_model_name = punctuation_model_name
-        
+        self.cleaner = TranscriptCleaner(punctuation_model_name)
     def _clean_submodule_transcripts(self, submodule: Dict, additional_metadata: Dict = {}) -> List[Dict]:
         """Clean the transcripts of a submodule and add additional metadata."""
         cleaned_transcripts = []
@@ -98,16 +97,15 @@ class TranscriptDocProcessor:
         }
         combined_metadata = {**additional_metadata, **submodule_metadata}
 
-        cleaner = TranscriptCleaner(self.punctuation_model_name)
         for youtube_metadata in submodule['youtube_metadatas']:
-            text, index = cleaner.clean_youtube_transcript(youtube_metadata['file_path'])
-            combined_metadata.update({"index_metadata": index})
+            text, index = self.cleaner.clean_youtube_transcript(youtube_metadata['file_path'])
+            combined_metadata.update({"index_metadata": index, "video_title": youtube_metadata['title'], "video_url": youtube_metadata['url']})
             transcript = {"content": text, "metadata": combined_metadata}
             cleaned_transcripts.append(transcript)
 
         for echo360_metadata in submodule['echo360_metadatas']:
-            text, index = cleaner.clean_echo360_transcript(echo360_metadata['file_path'])
-            combined_metadata.update({"index_metadata": index})
+            text, index = self.cleaner.clean_echo360_transcript(echo360_metadata['file_path'])
+            combined_metadata.update({"index_metadata": index, "video_title": echo360_metadata['title'], "video_url": echo360_metadata['url']})
             transcript = {"content": text, "metadata": combined_metadata}
             cleaned_transcripts.append(transcript)
 
