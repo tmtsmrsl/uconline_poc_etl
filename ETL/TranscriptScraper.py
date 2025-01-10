@@ -12,6 +12,8 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from youtube_transcript_api import YouTubeTranscriptApi
 
+from ETL.ContentProcessor import ContentMDFormatter
+
 # Set up logging
 log_filename = "video_scraper.log"
 logging.basicConfig(
@@ -75,7 +77,8 @@ class IframeExtractor:
                     previous_div = parent_div.find_previous_sibling("div", {"data-block-id": True})
                     if previous_div:
                         # Extract the text as description
-                        description = previous_div.get_text(strip=True)
+                        description = ContentMDFormatter(str(previous_div)).to_md(split_blocks=False)
+                        # description = previous_div.get_text(strip=True)
                         # Maybe we should also use Regex or LLM to double check if the text is an appropriate description of the video
                     else:
                         description = "" 
