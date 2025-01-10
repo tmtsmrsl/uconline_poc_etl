@@ -66,11 +66,25 @@ class IframeExtractor:
             soup = BeautifulSoup(submodule['html_content'], 'html.parser')
             extracted_iframes = []
             iframes = soup.find_all("iframe")
+
             for iframe in iframes:
-                extracted_iframes.append({
-                    "url": iframe.get("src", ""), 
-                    "title": iframe.get("title", "")
-                })
+                # Locate the parent div with the 'data-block-id' attribute
+                parent_div = iframe.find_parent("div", {"data-block-id": True})
+                if parent_div:
+                    # Find the previous sibling div with 'data-block-id' attribute
+                    previous_div = parent_div.find_previous_sibling("div", {"data-block-id": True})
+                    if previous_div:
+                        # Extract the text as description
+                        description = previous_div.get_text(strip=True)
+                    else:
+                        description = "" 
+                    
+                    # Add iframe details along with description
+                    extracted_iframes.append({
+                        "description": description,
+                        "url": iframe.get("src", ""),
+                        "title": iframe.get("title", "")
+                    })
             
             logger.info(f"Extracted {len(extracted_iframes)} iframes from submodule: {submodule['title']}")
             return extracted_iframes
@@ -140,9 +154,20 @@ class EchoTranscriptScraper:
     
     async def process_submodule_iframes(self, submodule_iframes: List[Dict[str, Any]], output_dir: str, concurrency_limit: int = 5) -> List[Dict[str, Any]]:
         submodule_transcript_metadatas = []
-        echo_urls = [iframe['url'] for iframe in submodule_iframes if "echo360" in iframe['url']]
-        if echo_urls:
-            submodule_transcript_metadatas.extend(await self.scrape_transcripts(echo_urls, output_dir, concurrency_limit))
+        echo_iframes = [iframe for iframe in submodule_iframes if "echo360" in iframe['url']]
+        
+        if echo_iframes:
+            # Extract descriptions and URLs from the filtered iframes
+            echo_descriptions = [iframe['description'] for iframe in echo_iframes]
+            echo_urls = [iframe['url'] for iframe in echo_iframes]
+            
+            transcript_metadatas = await self.scrape_transcripts(echo_urls, output_dir, concurrency_limit)
+            
+            # Add descriptions to the corresponding transcript metadata
+            for description, transcript_metadata in zip(echo_descriptions, transcript_metadatas):
+                transcript_metadata['description'] = description
+            
+            submodule_transcript_metadatas.extend(transcript_metadatas)
         return submodule_transcript_metadatas
     
 class YoutubeTranscriptScraper:
@@ -189,6 +214,7 @@ class YoutubeTranscriptScraper:
         for iframe in submodule_iframes:
             if "youtube" in iframe['url']:
                 transcript_metadata = self.scrape_transcript(iframe['url'], iframe['title'], output_dir)
+                transcript_metadata.update({"description": iframe['description']})
                 submodule_transcript_metadatas.append(transcript_metadata)
         
         return submodule_transcript_metadatas
