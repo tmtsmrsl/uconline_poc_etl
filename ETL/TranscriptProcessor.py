@@ -81,10 +81,46 @@ class TranscriptCleaner:
         return combined_texts, index
 
 class TranscriptDocProcessor:
-    def __init__(self, text_splitter_options: Optional[dict] = None, return_dict: bool = False, punctuation_model_name: str = "kredor/punctuate-all") -> None:
+    def __init__(self, text_splitter_options: Optional[dict] = None, return_dict: bool = False, punctuation_model_name: str = "kredor/punctuate-all", index_metadata_freq: int = 15) -> None:
         self.text_splitter_options = text_splitter_options
         self.return_dict = return_dict
         self.cleaner = TranscriptCleaner(punctuation_model_name)
+        self.index_metadata_freq = index_metadata_freq
+    
+    def _filter_index_metadata(self, entries):
+        """
+        Filters the index metadata to include only entries that occur after every n seconds.
+        """
+        if not entries:
+            return []
+
+        filtered_entries = []
+        filtered_entries.append(entries[0])
+        last_start_time = entries[0]['start_time']
+        
+        for entry in entries:
+            if entry['start_time'] >= last_start_time + self.index_metadata_freq:
+                filtered_entries.append(entry)
+                last_start_time = entry['start_time']
+
+        return filtered_entries
+    
+    def _clean_transcript(self, transcript_metadata: Dict, type: str, additional_metadata: Dict = {}) -> Document:
+        if type == 'youtube':
+            text, index = self.cleaner.clean_youtube_transcript(transcript_metadata['file_path'])
+        elif type == 'echo360':
+            text, index = self.cleaner.clean_echo360_transcript(transcript_metadata['file_path'])
+        else:
+            raise ValueError(f"Invalid transcript type: {type}")
+        
+        index = self._filter_index_metadata(index)
+        additional_metadata.update({"index_metadata": index, 
+                                    "video_title": transcript_metadata['title'], 
+                                    "video_url": transcript_metadata['url'], 
+                                    "video_desc": transcript_metadata['description']})
+        transcript = {"content": text, "metadata": additional_metadata}
+        return transcript
+        
     def _clean_submodule_transcripts(self, submodule: Dict, additional_metadata: Dict = {}) -> List[Dict]:
         """Clean the transcripts of a submodule and add additional metadata."""
         cleaned_transcripts = []
@@ -95,18 +131,14 @@ class TranscriptDocProcessor:
             'submodule_title': submodule['submodule_title'],
             'submodule_url': submodule['submodule_url']
         }
-        combined_metadata = {**additional_metadata, **submodule_metadata}
+        additional_metadata = {**additional_metadata, **submodule_metadata}
 
         for youtube_metadata in submodule['youtube_metadatas']:
-            text, index = self.cleaner.clean_youtube_transcript(youtube_metadata['file_path'])
-            combined_metadata.update({"index_metadata": index, "video_title": youtube_metadata['title'], "video_url": youtube_metadata['url']})
-            transcript = {"content": text, "metadata": combined_metadata}
+            transcript = self._clean_transcript(youtube_metadata, "youtube", additional_metadata)
             cleaned_transcripts.append(transcript)
 
         for echo360_metadata in submodule['echo360_metadatas']:
-            text, index = self.cleaner.clean_echo360_transcript(echo360_metadata['file_path'])
-            combined_metadata.update({"index_metadata": index, "video_title": echo360_metadata['title'], "video_url": echo360_metadata['url']})
-            transcript = {"content": text, "metadata": combined_metadata}
+            transcript = self._clean_transcript(echo360_metadata, "echo360", additional_metadata)
             cleaned_transcripts.append(transcript)
 
         return cleaned_transcripts
