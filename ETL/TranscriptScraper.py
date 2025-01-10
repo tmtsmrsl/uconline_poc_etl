@@ -76,6 +76,7 @@ class IframeExtractor:
                     if previous_div:
                         # Extract the text as description
                         description = previous_div.get_text(strip=True)
+                        # Maybe we should also use Regex or LLM to double check if the text is an appropriate description of the video
                     else:
                         description = "" 
                     
