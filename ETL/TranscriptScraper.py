@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import parse_qs, urlparse
 
@@ -125,7 +126,7 @@ class EchoTranscriptScraper:
                 title = await page.title()
                 
                 # Save the file to the specified path
-                file_path = f"{output_dir}/{sanitize_filename(title)}.vtt"
+                file_path = os.path.join(output_dir, f"{sanitize_filename(title)}.vtt")
                 await download.save_as(file_path)
 
                 # Close the browser
@@ -136,7 +137,7 @@ class EchoTranscriptScraper:
                 transcript_metadata = {
                     "title": title,
                     "url": url,
-                    "file_path": file_path,
+                    "file_path": Path(file_path).as_posix(),
                 }
 
             except Exception as e:
@@ -192,7 +193,7 @@ class YoutubeTranscriptScraper:
             transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US'])
             
             # Save the transcript to a file
-            file_path = f"{output_dir}/{sanitize_filename(title)}.json"
+            file_path = os.path.join(output_dir, f"{sanitize_filename(title)}.json")
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(transcript, f, indent=4)
                 
@@ -201,7 +202,7 @@ class YoutubeTranscriptScraper:
             return {
                 "title": title,
                 "url": youtube_url,
-                "file_path": file_path,
+                "file_path": Path(file_path).as_posix(),
             }
             
         except Exception as e:
