@@ -106,8 +106,8 @@ class TranscriptDocProcessor:
 
         return filtered_entries
     
-    def _clean_transcript(self, transcript_metadata: Dict, type: str, additional_metadata: Dict = {}) -> Document:
-        temp_additional_metadata = deepcopy(additional_metadata)
+    def _clean_transcript(self, transcript_metadata: Dict, type: str, additional_metadata: Optional[Dict] = None) -> Document:
+        temp_additional_metadata = deepcopy(additional_metadata) or {}
         if type == 'youtube':
             text, index = self.cleaner.clean_youtube_transcript(transcript_metadata['file_path'])
         elif type == 'echo360':
@@ -123,16 +123,16 @@ class TranscriptDocProcessor:
         transcript = {"content": text, "metadata": temp_additional_metadata}
         return transcript
         
-    def _clean_submodule_transcripts(self, transcript_metadatas: List, type: str, additional_metadata: Dict = {}) -> List[Dict]:
+    def _clean_submodule_transcripts(self, transcript_metadatas: List, type: str, additional_metadata: Optional[Dict] = None) -> List[Dict]:
         """Clean the transcripts of a submodule and add additional metadata."""
-        temp_additional_metadata = deepcopy(additional_metadata)
+        temp_additional_metadata = deepcopy(additional_metadata) or {}
         
         cleaned_transcripts = [self._clean_transcript(transcript_metadata, type, temp_additional_metadata) for transcript_metadata in transcript_metadatas]
         return cleaned_transcripts
 
-    def process_submodule_transcripts(self, submodule: Dict, additional_metadata: Dict = {}) -> List[Document]:
+    def process_submodule_transcripts(self, submodule: Dict, additional_metadata: List[Dict] = None) -> List[Document]:
         """Process the transcripts of a submodule into a list of Documents."""
-        temp_additional_metadata = deepcopy(additional_metadata)
+        temp_additional_metadata = deepcopy(additional_metadata) or {}
         cleaned_transcripts = []
         submodule_metadata = {
             'subsection': submodule['subsection'],
