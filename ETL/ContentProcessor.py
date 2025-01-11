@@ -193,13 +193,9 @@ class ContentDocProcessor:
         md_lesson_blocks = ContentMDFormatter(temp_submodule['html_content'], self.excluded_elements_css).to_md(split_blocks=True)
         
         # Generate block ranges for metadata
-        data_block_ranges = {
-            block['data_block_id']: {
-                'char_start': block['char_start'],
-                'char_end': block['char_end']
-            }
-            for block in md_lesson_blocks
-        }
+        data_block_ranges = []
+        for block in md_lesson_blocks:
+            data_block_ranges.append({"data_block_id": block['data_block_id'], "char_start": block['char_start']})
         
         # Combine the Markdown blocks
         combined_md = self._combine_blocks(md_lesson_blocks)
