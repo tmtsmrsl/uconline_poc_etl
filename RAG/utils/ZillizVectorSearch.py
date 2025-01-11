@@ -10,6 +10,7 @@ class ZillizVectorSearch:
         zilliz_password: str,
         zilliz_uri: str,
         collection_name: str,
+        output_fields: List[str],
         sparse_embeddings,
         dense_embeddings,
         colbert_reranker
@@ -21,6 +22,7 @@ class ZillizVectorSearch:
         self.zilliz_password = zilliz_password
         self.zilliz_uri = zilliz_uri
         self.collection_name = collection_name
+        self.output_fields = output_fields
         self.sparse_embeddings = sparse_embeddings
         self.dense_embeddings = dense_embeddings
         self.reranker = colbert_reranker
@@ -52,23 +54,12 @@ class ZillizVectorSearch:
         else:
             raise ValueError("Invalid embedding type. Must be either 'dense' or 'sparse'.")
 
-        output_fields = [
-            "pk",
-            "start_index",
-            "data_block_ranges",
-            "module_title",
-            "subsection",
-            "submodule_title",
-            "submodule_url",
-            "text",
-        ]
-
         results = self.collection.search(
             query,
             anns_field=anns_field,
             limit=top_k,
             param={"metric_type": metric_type},
-            output_fields=output_fields,
+            output_fields=self.output_fields,
         )
         results = [result.to_dict()["entity"] for result in results[0]]
 
