@@ -1,5 +1,6 @@
 import json
 import os
+from copy import deepcopy
 from datetime import timedelta
 from typing import Callable, Dict, List, Optional
 
@@ -106,6 +107,7 @@ class TranscriptDocProcessor:
         return filtered_entries
     
     def _clean_transcript(self, transcript_metadata: Dict, type: str, additional_metadata: Dict = {}) -> Document:
+        temp_additional_metadata = deepcopy(additional_metadata)
         if type == 'youtube':
             text, index = self.cleaner.clean_youtube_transcript(transcript_metadata['file_path'])
         elif type == 'echo360':
@@ -114,38 +116,32 @@ class TranscriptDocProcessor:
             raise ValueError(f"Invalid transcript type: {type}")
         
         index = self._filter_index_metadata(index)
-        additional_metadata.update({"index_metadata": index, 
+        temp_additional_metadata.update({"index_metadata": index, 
                                     "video_title": transcript_metadata['title'], 
                                     "video_url": transcript_metadata['url'], 
                                     "video_desc": transcript_metadata['description']})
-        transcript = {"content": text, "metadata": additional_metadata}
+        transcript = {"content": text, "metadata": temp_additional_metadata}
         return transcript
         
-    def _clean_submodule_transcripts(self, submodule: Dict, additional_metadata: Dict = {}) -> List[Dict]:
+    def _clean_submodule_transcripts(self, transcript_metadatas: List, type: str, additional_metadata: Dict = {}) -> List[Dict]:
         """Clean the transcripts of a submodule and add additional metadata."""
-        cleaned_transcripts = []
+        temp_additional_metadata = deepcopy(additional_metadata)
         
-        # Combine additional metadata with submodule-specific metadata
+        cleaned_transcripts = [self._clean_transcript(transcript_metadata, type, temp_additional_metadata) for transcript_metadata in transcript_metadatas]
+        return cleaned_transcripts
+
+    def process_submodule_transcripts(self, submodule: Dict, additional_metadata: Dict = {}) -> List[Document]:
+        """Process the transcripts of a submodule into a list of Documents."""
+        temp_additional_metadata = deepcopy(additional_metadata)
+        cleaned_transcripts = []
         submodule_metadata = {
             'subsection': submodule['subsection'],
             'submodule_title': submodule['submodule_title'],
             'submodule_url': submodule['submodule_url']
         }
-        additional_metadata = {**additional_metadata, **submodule_metadata}
-
-        for youtube_metadata in submodule['youtube_metadatas']:
-            transcript = self._clean_transcript(youtube_metadata, "youtube", additional_metadata)
-            cleaned_transcripts.append(transcript)
-
-        for echo360_metadata in submodule['echo360_metadatas']:
-            transcript = self._clean_transcript(echo360_metadata, "echo360", additional_metadata)
-            cleaned_transcripts.append(transcript)
-
-        return cleaned_transcripts
-
-    def process_submodule_transcripts(self, submodule: Dict, additional_metadata: Dict = {}) -> List[Document]:
-        """Process the transcripts of a submodule into a list of Documents."""
-        cleaned_transcripts = self._clean_submodule_transcripts(submodule, additional_metadata)
+        temp_additional_metadata.update(submodule_metadata)
+        cleaned_transcripts.extend(self._clean_submodule_transcripts(submodule['youtube_metadatas'], 'youtube', temp_additional_metadata))
+        cleaned_transcripts.extend(self._clean_submodule_transcripts(submodule['echo360_metadatas'], 'echo360', temp_additional_metadata))
         
         text_splitter = RecursiveTextSplitter(**self.text_splitter_options)
         doc_splits = []
