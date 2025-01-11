@@ -73,23 +73,21 @@ class IframeExtractor:
             for iframe in iframes:
                 # Locate the parent div with the 'data-block-id' attribute
                 parent_div = iframe.find_parent("div", {"data-block-id": True})
-                if parent_div:
-                    # Find the previous sibling div with 'data-block-id' attribute
-                    previous_div = parent_div.find_previous_sibling("div", {"data-block-id": True})
-                    if previous_div:
-                        # Extract the text as description
-                        description = ContentMDFormatter(str(previous_div)).to_md(split_blocks=False)
-                        # description = previous_div.get_text(strip=True)
-                        # Maybe we should also use Regex or LLM to double check if the text is an appropriate description of the video
-                    else:
-                        description = "" 
-                    
-                    # Add iframe details along with description
-                    extracted_iframes.append({
-                        "description": description,
-                        "url": iframe.get("src", ""),
-                        "title": iframe.get("title", "")
-                    })
+                # Find the previous sibling div with 'data-block-id' attribute
+                previous_div = parent_div.find_previous_sibling("div", {"data-block-id": True})
+                if previous_div:
+                    # Extract the text as description
+                    description = ContentMDFormatter(str(previous_div)).to_md(split_blocks=False)
+                    # Maybe we should also use Regex or LLM to double check if the text is an appropriate description of the video
+                else:
+                    description = "" 
+                
+                # Add iframe details along with description
+                extracted_iframes.append({
+                    "description": description,
+                    "url": iframe.get("src", ""),
+                    "title": iframe.get("title", "")
+                })
             
             logger.info(f"Extracted {len(extracted_iframes)} iframes from submodule: {submodule['title']}")
             return extracted_iframes
