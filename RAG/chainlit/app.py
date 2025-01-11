@@ -2,60 +2,17 @@ import os
 from typing import Dict, List
 
 import chainlit as cl
-import joblib
-import torch
-from chainlit.input_widget import Select, Slider, Switch
-from dotenv import load_dotenv
+from chainlit.input_widget import Select
 from langchain_cerebras import ChatCerebras
 from langchain_openai import ChatOpenAI
-from pymilvus.model.hybrid import BGEM3EmbeddingFunction
 
-from RAG.utils import config
-from RAG.utils.ColBERTReranker import ColBERTReranker
 from RAG.utils.QAPipeline import QAPipeline
-from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
+from RAG.utils.setup import initialize_vector_search, load_config, load_env_vars
 
-
-def load_env_vars() -> Dict:
-    """Load environment variables from the .env file."""
-    load_dotenv()
-    session_env = {
-        "ZILLIZ_URI": os.getenv("ZILLIZ_URI"),
-        "ZILLIZ_USER": os.getenv("ZILLIZ_USER"),
-        "ZILLIZ_PASSWORD": os.getenv("ZILLIZ_PASSWORD"),
-        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-        "CEREBRAS_API_KEY": os.getenv("CEREBRAS_API_KEY"),
-        "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY")
-    }
-    cl.user_session.set("session_env", session_env)
-    
-def load_config() -> Dict:
-    """Load configuration settings for the app."""
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    session_config = {
-        "DEVICE": DEVICE, 
-        "SPARSE_EMBEDDINGS_PATH": config.SPARSE_EMBEDDINGS_PATH,
-        "COLBERT_MODEL_NAME": config.COLBERT_MODEL_NAME,
-        "ZILLIZ_COLLECTION_NAME": config.ZILLIZ_COLLECTION_NAME,
-        "COURSE_NAME": config.COURSE_NAME,
-        "LLM_TEMPERATURE": config.LLM_TEMPERATURE,
-        "LLM_MAX_RETRIES": config.LLM_MAX_RETRIES
-    }
-    cl.user_session.set("session_config", session_config)
-    
-def initialize_vector_search() -> ZillizVectorSearch:
-    """Initialize vector search with Zilliz."""
-    session_env = cl.user_session.get("session_env")
-    session_config = cl.user_session.get("session_config")
-    
-    dense_embeddings = BGEM3EmbeddingFunction(use_fp16=False, device=session_config['DEVICE'], return_dense=True, return_sparse=False)
-    sparse_embeddings = joblib.load(session_config['SPARSE_EMBEDDINGS_PATH'])
-    colbert_reranker = ColBERTReranker(model_name=session_config['COLBERT_MODEL_NAME'])
-    
-    vector_search = ZillizVectorSearch(session_env["ZILLIZ_USER"], session_env["ZILLIZ_PASSWORD"], session_env["ZILLIZ_URI"], 
-                            session_config['ZILLIZ_COLLECTION_NAME'], sparse_embeddings, dense_embeddings, colbert_reranker)
-    
-    cl.user_session.set("vector_search", vector_search)
+cl.user_session.set("session_env", load_env_vars())
+cl.user_session.set("session_config", load_config())
+vector_search = initialize_vector_search(cl.user_session.get("session_env"), cl.user_session.get("session_config"))    
+cl.user_session.set("vector_search", vector_search)
 
 async def send_initial_message():
     """Send an initial welcome message to the user."""
