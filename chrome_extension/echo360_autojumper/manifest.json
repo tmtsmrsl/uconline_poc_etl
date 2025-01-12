@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "Echo360 Autojumper",
+    "version": "1.0",
+    "permissions": ["activeTab", "scripting"],
+    "content_scripts": [
+        {
+            "matches": ["*://echo360.net.au/*"],
+            "js": ["content.js"],
+            "all_frames": true
+        }
+    ]
+}
