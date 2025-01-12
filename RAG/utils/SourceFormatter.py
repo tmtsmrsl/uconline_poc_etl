@@ -32,10 +32,6 @@ class SourceFormatter:
                 f"{source_metadata['subsection']}: {source_metadata['submodule_title']}:\n"
             )
             
-        else:
-            # there shouldn't be any other content_type if the method is called downstream from format_sources_for_llm
-            return ""
-        
     @staticmethod
     def _merge_overlapping_sources(sources: List[Dict], url_key: str) -> List[Dict]:
         """
