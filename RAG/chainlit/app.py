@@ -9,10 +9,6 @@ from langchain_openai import ChatOpenAI
 from RAG.utils.QAPipeline import QAPipeline
 from RAG.utils.setup import initialize_vector_search, load_config, load_env_vars
 
-cl.user_session.set("session_env", load_env_vars())
-cl.user_session.set("session_config", load_config())
-vector_search = initialize_vector_search(cl.user_session.get("session_env"), cl.user_session.get("session_config"))    
-cl.user_session.set("vector_search", vector_search)
 
 async def send_initial_message():
     """Send an initial welcome message to the user."""
@@ -56,17 +52,17 @@ async def setup_pipeline(settings):
 
 @cl.on_chat_start
 async def start():
+    # Load environment variables and configuration settings
+    cl.user_session.set("session_env", load_env_vars())
+    cl.user_session.set("session_config", load_config())
+    
+    # intialize vector search
+    vector_search = initialize_vector_search(cl.user_session.get("session_env"), cl.user_session.get("session_config"))    
+    cl.user_session.set("vector_search", vector_search)
+    
     # Enable the tracing feature of Langsmith
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
-    
-    # Load environment variables and configuration settings
-    load_env_vars()
-    load_config()
-    
-    
-    # intialize vector search
-    initialize_vector_search()
     
     # Setup the settings interface and QAPipeline with the default model
     settings = await cl.ChatSettings(
