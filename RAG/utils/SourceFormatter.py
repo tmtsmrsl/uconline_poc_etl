@@ -25,21 +25,21 @@ class SourceFormatter:
         text = re.sub(r'\]', r'\\]', text)  
         return text
 
-    @staticmethod
-    def _generate_contextual_header(source_metadata: Dict) -> str:
-        """
-        Generates a contextual header based on the metadata of the source.
-        """
-        if source_metadata['content_type'] == 'video_transcript':
-            # Replace newlines with a single space and truncate to 1000 characters
-            video_desc = re.sub(r'\n+', ' ', source_metadata['video_desc'][:1000])
-            return f"Below are transcript snippet from video with a description of: {video_desc.strip()}:\n"
+    # @staticmethod
+    # def _generate_contextual_header(source_metadata: Dict) -> str:
+    #     """
+    #     Generates a contextual header based on the metadata of the source.
+    #     """
+    #     if source_metadata['content_type'] == 'video_transcript':
+    #         # Replace newlines with a single space and truncate to 1000 characters
+    #         video_desc = re.sub(r'\n+', ' ', source_metadata['video_desc'][:1000])
+    #         return f"Below are transcript snippet from video with a description of: {video_desc.strip()}:\n"
         
-        elif source_metadata['content_type'] == 'html_content':
-            return (
-                f"Below are content snippet of: {source_metadata['module_title']} - "
-                f"{source_metadata['subsection']}: {source_metadata['submodule_title']}:\n"
-            )
+    #     elif source_metadata['content_type'] == 'html_content':
+    #         return (
+    #             f"Below are content snippet of: {source_metadata['module_title']} - "
+    #             f"{source_metadata['subsection']}: {source_metadata['submodule_title']}:\n"
+    #         )
             
     @staticmethod
     def _merge_overlapping_sources(sources: List[Dict], url_key: str) -> List[Dict]:
@@ -91,9 +91,6 @@ class SourceFormatter:
         start_index = source['metadata']['start_index']
         end_index = start_index + len(source['text'])
 
-        # Generate the contextual header
-        contextual_header = self._generate_contextual_header(source['metadata'])
-
         # Determine the block identifier key
         block_id_key = config["block_id_key"]
 
@@ -125,7 +122,7 @@ class SourceFormatter:
         source_dict = {
             "url": source['metadata'][config["url_key"]],
             "title": source['metadata'][config["title_key"]],
-            "contextual_header": contextual_header,
+            "contextual_header": source['metadata']['contextual_header'],
             "source_splits": source_splits,
             "content_type": source['metadata']['content_type'],
         }
