@@ -100,8 +100,17 @@ class CitationFormatter:
         return re.sub(pattern, replace_consecutive, text)
     
     def format_final_answer(self, answer: str, source_metadata: List[Dict]) -> Dict:
+        def replace_citation(match, citation_mapping):
+            old_id = int(match.group(1)) 
+            # Get the new_citation_id or keep the old one if not found
+            new_id = citation_mapping.get(old_id, None)
+            if new_id:  
+                return f"[{new_id}]"
+            else:
+                raise ValueError(f"Could not find the old citation id {old_id} in citation_mapping")
+        
         # extract the citation ids from the answer
-        citation_pattern = re.compile(r"\^\[(\d+)\]")
+        citation_pattern = re.compile(r"\[(\d+)\]")
         citation_ids = citation_pattern.findall(answer)
         citation_ids = set([int(id) for id in citation_ids])
 
@@ -134,11 +143,13 @@ class CitationFormatter:
             citation['new_citation_id'] = new_citation_id
             new_citation_id += 1
 
-        # reformat the answer with the new citation ids
-        final_answer = answer
+        # Create a mapping of old_citation_id to new_citation_id
+        citation_mapping = {}
         for citation in citation_data:
             for old_citation_id in citation['old_citation_ids']:
-                final_answer = final_answer.replace(f"^[{old_citation_id}]", f"[{citation['new_citation_id']}]")
+                citation_mapping[old_citation_id] = citation['new_citation_id']
+        
+        final_answer = re.sub(r'\[(\d+)\]', lambda match: replace_citation(match, citation_mapping), answer)
                 
         final_citation = {}
         for citation in citation_data:
@@ -147,4 +158,4 @@ class CitationFormatter:
         # deduplicate the final citation
         final_answer = self._deduplicate_consecutive_citations(final_answer)
         
-        return {"content": final_answer, "citation": final_citation, "citation_data": citation_data}
+        return {"content": final_answer, "citation": final_citation}

@@ -37,7 +37,7 @@ class PromptManager:
     def load_generate_prompt(course_name) -> ChatPromptTemplate:
         generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a user question and some course contents, answer the question based on the course contents and justify your answer by providing an accurate inline citation of the source IDs. If none of the course content answer the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". 
 Follow the following format STRICTLY for the final answer:
-This is an example of inline citation^[5]. One sentence can have multiple inline citations^[3], and the inline citation can also consist of multiple numbers^[7]^[8]. 
+This is an example of inline citation[5]. One sentence can have multiple inline citations[3], and the inline citation can also consist of multiple numbers[7][8]. 
 
 Here are the course contents (not visible to the user):
 {{sources}}"""

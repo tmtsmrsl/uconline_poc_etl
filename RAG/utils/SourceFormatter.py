@@ -17,6 +17,15 @@ class SourceFormatter:
             },
         }
     @staticmethod
+    def escape_square_brackets(text):
+        """
+        Escape all square brackets ([ and ]) in the given text.
+        """
+        text = re.sub(r'\[', r'\\[', text)  
+        text = re.sub(r'\]', r'\\]', text)  
+        return text
+
+    @staticmethod
     def _generate_contextual_header(source_metadata: Dict) -> str:
         """
         Generates a contextual header based on the metadata of the source.
@@ -162,7 +171,8 @@ class SourceFormatter:
             # Assign source IDs and format the splits
             for split in source_dict['source_splits']:
                 split['source_id'] = source_id
-                formatted_splits += f"[{split['source_id']}]\n{split['text'].strip()}\n"
+                text = self.escape_square_brackets(split['text']).strip()
+                formatted_splits += f"[{source_id}]\n{text}\n"
                 source_id += 1
 
             # Add source IDs to the source dictionary
