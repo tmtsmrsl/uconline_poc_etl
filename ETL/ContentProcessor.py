@@ -58,6 +58,17 @@ class CustomMDConverter(MarkdownConverter):
             return f"\n<h{n}>{text}</h{n}>\n\n"
         else:
             return super()._convert_hn(n, el, text, convert_as_inline)
+        
+    def convert_img(self, el, text, convert_as_inline):
+        alt = el.attrs.get('alt', None) or ''
+        src = el.attrs.get('src', None) or ''
+        title = el.attrs.get('title', None) or ''
+        title_part = ' "%s"' % title.replace('"', r'\"') if title else ''
+        if (convert_as_inline
+                and el.parent.name not in self.options['keep_inline_images_in']) or self.options["keep_image_alt_only"]:
+            return f"An image with the following description: {alt}"
+
+        return '![%s](%s%s)' % (alt, src, title_part)
 
 class ContentHTMLProcessor:
     """
@@ -109,7 +120,7 @@ class ContentMDFormatter:
     """
     def __init__(self, submodule_html: str, excluded_elements_css: Optional[str] = None, md_converter_options: Optional[dict] = None) -> None:
         self.submodule_html = submodule_html
-        self.md_converter_options = {"heading_style": "ATX"}
+        self.md_converter_options = {"heading_style": "ATX", "keep_image_alt_only": True}
         if md_converter_options:
             self.md_converter_options.update(md_converter_options)
         self.excluded_elements_css = excluded_elements_css
