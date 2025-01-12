@@ -33,6 +33,7 @@ class SourceFormatter:
             )
             
         else:
+            # there shouldn't be any other content_type if the method is called downstream from format_sources_for_llm
             return ""
         
     @staticmethod
@@ -110,7 +111,7 @@ class SourceFormatter:
 
                 source_splits.append(
                     {
-                        "block_id": str(block_id),
+                        "block_id": block_id,
                         "text": text,
                     }
                 )
@@ -120,7 +121,8 @@ class SourceFormatter:
             "url": source['metadata'][config["url_key"]],
             "title": source['metadata'][config["title_key"]],
             "contextual_header": contextual_header,
-            "source_splits": source_splits
+            "source_splits": source_splits,
+            "content_type": source['metadata']['content_type'],
         }
 
         return source_dict
