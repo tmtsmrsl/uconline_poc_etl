@@ -1,9 +1,11 @@
 import json
 import os
+import re
 from copy import deepcopy
 from datetime import timedelta
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
+import numpy as np
 import webvtt
 from deepmultilingualpunctuation import PunctuationModel
 from langchain_core.documents import Document
@@ -25,8 +27,8 @@ class TranscriptCleaner:
         with open(json_file, "r") as f:
             transcript_fragments = json.load(f)
 
-        # Make a temporary index based on the word count of unpunctuated text
-        temp_index = []
+        # Make a temporary indexes based on the word count of unpunctuated text
+        temp_indexes = []
         temp_text_list = []
         word_idx = 0
 
@@ -34,7 +36,7 @@ class TranscriptCleaner:
             text = fragment['text']
             if text != "[Music]":
                 temp_text_list.append(text)
-                temp_index.append({"word_idx_start": word_idx, "start_time": fragment['start']})
+                temp_indexes.append({"word_idx_start": word_idx, "start_time": fragment['start']})
                 word_idx += len(text.split())
 
         temp_combined_texts = " ".join(temp_text_list)
@@ -43,15 +45,15 @@ class TranscriptCleaner:
         combined_texts = self.model.restore_punctuation(temp_combined_texts)
 
         text_list = combined_texts.split()
-        index = []
+        indexes = []
         
-        # Use the temporary index to find the character index for the punctuated text
-        for idx in temp_index:
+        # Use the temporary indexes to find the character indexes for the punctuated text
+        for idx in temp_indexes:
             text_up_to_idx = text_list[:idx['word_idx_start']]
             char_start = len(" ".join(text_up_to_idx))
-            index.append({"char_start": char_start, "start_time": idx['start_time']})
+            indexes.append({"char_start": char_start, "start_time": idx['start_time']})
 
-        return combined_texts, index
+        return combined_texts, indexes
     
     def _convert_vtt_time_to_seconds(self, vtt_timestamp) -> float:
         """
@@ -67,56 +69,79 @@ class TranscriptCleaner:
         """
         transcript_fragments = webvtt.read(vtt_file)
 
-        index = []
+        indexes = []
         text_list = []
         char_idx = 0
         for fragment in transcript_fragments:
             # the echo360 transcript contains unnecessary newlines
             text = fragment.text.replace("\n", " ") + " "
             text_list.append(text)
-            index.append({"char_start": char_idx, "start_time": self._convert_vtt_time_to_seconds(fragment.start_time)})
+            indexes.append({"char_start": char_idx, "start_time": self._convert_vtt_time_to_seconds(fragment.start_time)})
             char_idx += len(text)
 
         combined_texts = "".join(text_list)
 
-        return combined_texts, index
+        return combined_texts, indexes
 
 class TranscriptDocProcessor:
-    def __init__(self, text_splitter_options: Optional[dict] = None, return_dict: bool = False, punctuation_model_name: str = "kredor/punctuate-all", index_metadata_freq: int = 15) -> None:
+    def __init__(self, text_splitter_options: Optional[dict] = None, return_dict: bool = False, punctuation_model_name: str = "kredor/punctuate-all", index_freq: int = 15) -> None:
         self.text_splitter_options = text_splitter_options
         self.return_dict = return_dict
         self.cleaner = TranscriptCleaner(punctuation_model_name)
-        self.index_metadata_freq = index_metadata_freq
-    
-    def _filter_index_metadata(self, entries):
+        self.index_freq = index_freq
+        
+    @staticmethod
+    def _filter_indexes(indexes: List[Dict], index_freq: int = 15) -> List[Dict]:
         """
-        Filters the index metadata to include only entries that occur after every n seconds.
+        Filters the indexes to include only indexes that occur after every n seconds.
         """
-        if not entries:
+        if not indexes:
             return []
 
-        filtered_entries = []
-        filtered_entries.append(entries[0])
-        last_start_time = entries[0]['start_time']
+        filtered_indexes = []
+        filtered_indexes.append(indexes[0])
+        last_start_time = indexes[0]['start_time']
         
-        for entry in entries:
-            if entry['start_time'] >= last_start_time + self.index_metadata_freq:
-                filtered_entries.append(entry)
-                last_start_time = entry['start_time']
+        for index in indexes:
+            if index['start_time'] >= last_start_time + index_freq:
+                filtered_indexes.append(index)
+                last_start_time = index['start_time']
 
-        return filtered_entries
+        return filtered_indexes
     
-    def _clean_transcript(self, transcript_metadata: Dict, type: str, additional_metadata: Optional[Dict] = None) -> Document:
+    @staticmethod
+    def _adjust_indexes(text: str, indexes: List[Dict]) -> List[Dict]:
+        """
+        Adjust the indexes to the start of the sentence that char_start is in.
+        """
+        new_indexes = []
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sent_starts = np.array([0])
+        for sent in sentences:
+            sent_starts = np.append(sent_starts, sent_starts[-1] + len(sent) + 1)
+            
+        for index in indexes:
+            # find the sentence index that is before the char_start
+            latest_sent_start = sent_starts[np.where(sent_starts <= index['char_start'])][-1]
+            new_indexes.append({"start_time": index['start_time'], "char_start": latest_sent_start})
+        return new_indexes
+    
+    def _clean_transcript(self, transcript_metadata: Dict, type: str, additional_metadata: Optional[Dict] = None) -> Dict:
+        """
+        Clean the transcript of a video and return a dictionary with the cleaned text and metadata.
+        """
         temp_additional_metadata = deepcopy(additional_metadata) or {}
         if type == 'youtube':
-            text, index = self.cleaner.clean_youtube_transcript(transcript_metadata['file_path'])
+            text, indexes = self.cleaner.clean_youtube_transcript(transcript_metadata['file_path'])
         elif type == 'echo360':
-            text, index = self.cleaner.clean_echo360_transcript(transcript_metadata['file_path'])
+            text, indexes = self.cleaner.clean_echo360_transcript(transcript_metadata['file_path'])
         else:
             raise ValueError(f"Invalid transcript type: {type}")
         
-        index = self._filter_index_metadata(index)
-        temp_additional_metadata.update({"index_metadata": index, 
+        indexes = self._filter_indexes(indexes, self.index_freq)
+        indexes = self._adjust_indexes(text, indexes)
+        
+        temp_additional_metadata.update({"index_metadata": indexes, 
                                     "video_title": transcript_metadata['title'], 
                                     "video_url": transcript_metadata['url'], 
                                     "video_desc": transcript_metadata['description']})
