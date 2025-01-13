@@ -117,42 +117,57 @@ class CitationFormatter:
         # find the source for each citation
         citation_data = []
 
+        unique_urls = set()
+        # merge source_metadata with the same url
         for source in source_metadata:
             matching_ids = set(source['source_ids']).intersection(citation_ids)
             if matching_ids:
-                citation = {"url": source['url'], 
-                            "title": source['title'],
-                            "old_citation_ids": [], 
-                            "block_ids": [],
-                            "content_type": source['content_type']}
-                for source_split in source['source_splits']:
-                    if source_split['source_id'] in matching_ids:
-                        citation['old_citation_ids'].append(source_split['source_id'])
-                        citation['block_ids'].append(source_split['block_id'])
-                if citation['content_type'] == 'video_transcript':
-                    citation_data.extend(process_video_citation(citation))
-                elif citation['content_type'] == 'html_content':
-                    citation['final_url'] = citation['url'] + "/block/" + ",".join(citation['block_ids'])
+                if source['url'] not in unique_urls:
+                    unique_urls.add(source['url'])
+                    citation = {"url": source['url'], 
+                                "title": source['title'],
+                                "old_citation_ids": [], 
+                                "block_ids": [],
+                                "content_type": source['content_type']}
+                    for source_split in source['source_splits']:
+                        if source_split['source_id'] in matching_ids:
+                            citation['old_citation_ids'].append(source_split['source_id'])
+                            citation['block_ids'].append(source_split['block_id'])
                     citation_data.append(citation)
+                else:
+                    citation = next((c for c in citation_data if c['url'] == source['url']), None)
+                    for source_split in source['source_splits']:
+                        if source_split['source_id'] in matching_ids:
+                            citation['old_citation_ids'].append(source_split['source_id'])
+                            citation['block_ids'].append(source_split['block_id'])
+                            
+        new_citation_data = []
+        for citation in citation_data:        
+            if citation['content_type'] == 'video_transcript':
+                new_citation_data.extend(process_video_citation(citation))
+            elif citation['content_type'] == 'html_content':
+                citation['final_url'] = citation['url'] + "/block/" + ",".join(citation['block_ids'])
+                new_citation_data.append(citation)
+                
         
         # Sort by the minimum value in 'citation_ids'
-        citation_data = sorted(citation_data, key=lambda x: min(x['old_citation_ids']))
+        new_citation_data = sorted(new_citation_data, key=lambda x: min(x['old_citation_ids']))
         # process the final citation url and id
         new_citation_id = 1
-        for citation in citation_data:
+        for citation in new_citation_data:
             citation['new_citation_id'] = new_citation_id
             new_citation_id += 1
 
         # Create a mapping of old_citation_id to new_citation_id
         citation_mapping = {}
-        for citation in citation_data:
+        for citation in new_citation_data:
             for old_citation_id in citation['old_citation_ids']:
                 citation_mapping[old_citation_id] = citation['new_citation_id']
         
         final_answer = re.sub(r'\[(\d+)\]', lambda match: replace_citation(match, citation_mapping), answer)
                 
         final_citation = {}
-        for citation in citation_data:
+        for citation in new_citation_data:
             final_citation[citation['new_citation_id']] = {"url": citation['final_url'], "title": citation['title'], "content_type": citation['content_type']}
         
         # deduplicate the final citation
