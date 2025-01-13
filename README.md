@@ -37,18 +37,10 @@ This will save the transcript and metadata (`metadata.json`) of videos for each 
 5. Store the embeddings of the documents in a vector database. Please check the Section 3 of `ETL/vector_db_loading.ipynb` for an example. Note that I am using BGE-M3 for the dense embeddings, BM25 for the sparse embeddings, and Zilliz (cloud-managed Milvus) for the vector database. The trained sparse embeddings should be stored for future use.
 
 ## RAG 
-You can run the RAG pipeline either as a Chainlit app, which provides a chatbot interface for interaction, or as a FastAPI app if you only need a REST API endpoint. 
-
-#### Chainlit app
-Run the command below from the project root directory to start the Chainlit app on your local machine.
-```bash
-python -m chainlit run RAG/chainlit/app.py -w
-```
-
-By default, the Chainlit app will run on `http://localhost:8000`.
+You can run the RAG pipeline either as a standalone FastAPI endpoint or bundled with the Chainlit app, which provides a chatbot interface for interaction. 
 
 #### FastAPI endpoint
-Run the command below from the project root directory to start the FastAPI app on your local machine.
+The FastAPI endpoint acts as a REST API for the RAG pipeline. Run the command below from the project root directory to start the FastAPI app on your local machine.
 ```bash
 uvicorn RAG.fastapi.main:app --reload --port 8010
 ```
@@ -56,13 +48,22 @@ uvicorn RAG.fastapi.main:app --reload --port 8010
 Example request to the FastAPI endpoint:
 ```bash
 curl -X 'POST' \
-  'http://127.0.0.1:8010/ask' \
+  'localhost:8010/ask' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "How can we support indigenous sustainability?",
     "model_type": "llama-3.3"
   }'
 ```
+Currently, the available model types are `llama-3.3` and `gpt-4o`.
+
+#### Chainlit app
+If you want to interact with the FastAPI endpoint using a chatbot interface, you can run the command below from the project root directory to start the Chainlit app on your local machine.
+```bash
+python -m chainlit run RAG/chainlit/app.py -w --port 8000
+```
+
+The Chainlit app will run on `http://localhost:8000`. Note that the FastAPI endpoint should be running on `http://localhost:8010` for the Chainlit app to work properly.
 
 Architecture of the RAG pipeline:  
 
