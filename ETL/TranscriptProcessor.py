@@ -72,12 +72,12 @@ class TranscriptCleaner:
         char_idx = 0
         for fragment in transcript_fragments:
             # the echo360 transcript contains unnecessary newlines
-            text = fragment.text.replace("\n", " ")
+            text = fragment.text.replace("\n", " ") + " "
             text_list.append(text)
             index.append({"char_start": char_idx, "start_time": self._convert_vtt_time_to_seconds(fragment.start_time)})
             char_idx += len(text)
 
-        combined_texts = " ".join(text_list)
+        combined_texts = "".join(text_list)
 
         return combined_texts, index
 
