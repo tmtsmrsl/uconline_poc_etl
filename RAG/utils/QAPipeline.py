@@ -48,7 +48,7 @@ Here are the course contents (not visible to the user):
         ])
     
 class QAPipeline():
-    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str):
+    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str, search_top_k_each: int = 5, search_top_k_final: int = 5):
         self.llm = llm
         self.vector_search = vector_search
         self.prompt_manager = PromptManager()
@@ -56,6 +56,8 @@ class QAPipeline():
         self.citation_formatter = CitationFormatter()
         self.guardrail_prompt = self.prompt_manager.load_guardrail_prompt(course_name)
         self.generate_prompt = self.prompt_manager.load_generate_prompt(course_name)
+        self.search_top_k_each = search_top_k_each
+        self.search_top_k_final = search_top_k_final
         self.graph = self.build_graph()
     
     def guardrail(self, state: State):
@@ -67,7 +69,7 @@ class QAPipeline():
         return state["input_allowed"]
         
     def retrieve(self, state: State):
-        retrieved_sources = self.vector_search.hybrid_search(query=state["question"], top_k_final=4)
+        retrieved_sources = self.vector_search.hybrid_search(query=state["question"], top_k_each=self.search_top_k_each, top_k_final=self.search_top_k_final)
         formatted_sources = self.source_formatter.format_sources_for_llm(retrieved_sources)
         return {"sources": retrieved_sources, "formatted_sources": formatted_sources}
 
