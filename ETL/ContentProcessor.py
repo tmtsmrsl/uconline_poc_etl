@@ -66,9 +66,12 @@ class CustomMDConverter(MarkdownConverter):
         title_part = ' "%s"' % title.replace('"', r'\"') if title else ''
         if (convert_as_inline
                 and el.parent.name not in self.options['keep_inline_images_in']) or self.options["keep_image_alt_only"]:
-            return f"An image with the following description: {alt}"
-
-        return '![%s](%s%s)' % (alt, src, title_part)
+            if alt:
+                return f"An image with the following description: {alt}"
+            else:
+                return ""
+        else:
+            return '![%s](%s%s)' % (alt, src, title_part)
 
 class ContentHTMLProcessor:
     """
