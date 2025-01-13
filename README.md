@@ -50,16 +50,17 @@ By default, the Chainlit app will run on `http://localhost:8000`.
 #### FastAPI endpoint
 Run the command below from the project root directory to start the FastAPI app on your local machine.
 ```bash
-uvicorn RAG.fastapi.main:app --reload
+uvicorn RAG.fastapi.main:app --reload --port 8010
 ```
 
 Example request to the FastAPI endpoint:
 ```bash
 curl -X 'POST' \
-  'http://127.0.0.1:8000/ask' \
+  'http://127.0.0.1:8010/ask' \
   -H 'Content-Type: application/json' \
   -d '{
-    "query": "How can we support indigenous sustainability?"
+    "query": "How can we support indigenous sustainability?",
+    "model_type": "llama-3.3"
   }'
 ```
 
