@@ -123,6 +123,8 @@ class TranscriptDocProcessor:
         for index in indexes:
             # find the sentence index that is before the char_start
             latest_sent_start = sent_starts[np.where(sent_starts <= index['char_start'])][-1]
+            # convert to int as numpy int is not serializable
+            latest_sent_start = int(latest_sent_start)
             new_indexes.append({"start_time": index['start_time'], "char_start": latest_sent_start})
         return new_indexes
     
