@@ -39,7 +39,7 @@ class ZillizVectorSearch:
         )
         return Collection(self.collection_name)
 
-    def search(self, query: str, embedding_type: str, top_k: int) -> List[Dict]:
+    def search(self, query: str, embedding_type: str = "dense", top_k: int = 5) -> List[Dict]:
         """
         Perform the search on a specific vector type (dense or sparse).
         """
