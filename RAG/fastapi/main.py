@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException
@@ -8,14 +9,14 @@ from pydantic import BaseModel
 
 from RAG.utils.QAPipeline import QAPipeline
 from RAG.utils.setup import initialize_vector_search, load_config, load_env_vars
+from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
 
 
-def setup_pipeline(model_type: str) -> QAPipeline:
+def setup_pipeline(model_type: str, vector_search: ZillizVectorSearch) -> QAPipeline:
     """Setup the QA pipeline with pre-configured settings."""
     session_env = load_env_vars()
     session_config = load_config()
 
-    vector_search = initialize_vector_search(session_env, session_config)
     if model_type == "llama-3.3":
         llm = ChatCerebras(
             api_key=session_env['CEREBRAS_API_KEY'],
@@ -38,8 +39,16 @@ def setup_pipeline(model_type: str) -> QAPipeline:
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
 
-# FastAPI app initialization
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize the vector search and store it in the app state."""
+    session_env = load_env_vars()
+    session_config = load_config()
+    app.state.vector_search = initialize_vector_search(session_env, session_config)
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 class QueryRequest(BaseModel):
     query: str
@@ -63,7 +72,7 @@ async def ask_question(request: QueryRequest):
     
     try:
         # initializing the QA pipeline with the specified model type
-        qa_pipeline = setup_pipeline(model_type=model_type)
+        qa_pipeline = setup_pipeline(model_type=model_type, vector_search=app.state.vector_search)
         
         # Running the query through the QA pipeline
         response = qa_pipeline.run(query=query)
