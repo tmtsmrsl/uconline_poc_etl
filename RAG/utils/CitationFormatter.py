@@ -153,7 +153,7 @@ class CitationFormatter:
                 
         final_citation = {}
         for citation in citation_data:
-            final_citation[citation['new_citation_id']] = {"url": citation['final_url'], "title": citation['title']}
+            final_citation[citation['new_citation_id']] = {"url": citation['final_url'], "title": citation['title'], "content_type": citation['content_type']}
         
         # deduplicate the final citation
         final_answer = self._deduplicate_consecutive_citations(final_answer)
