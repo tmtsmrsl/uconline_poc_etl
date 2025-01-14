@@ -119,6 +119,7 @@ class CitationFormatter:
 
         unique_urls = set()
         # merge source_metadata with the same url
+        # note that the source_metadata is already sorted by the order of source_id (which will now be the old_citation_id)
         for source in source_metadata:
             matching_ids = set(source['source_ids']).intersection(citation_ids)
             if matching_ids:
@@ -132,6 +133,7 @@ class CitationFormatter:
                     for source_split in source['source_splits']:
                         if source_split['source_id'] in matching_ids:
                             citation['old_citation_ids'].append(source_split['source_id'])
+                            # this block id is already sorted by their char start index in the source text
                             citation['block_ids'].append(source_split['block_id'])
                     citation_data.append(citation)
                 else:
@@ -150,8 +152,8 @@ class CitationFormatter:
                 new_citation_data.append(citation)
                 
         
-        # Sort by the minimum value in 'citation_ids'
-        new_citation_data = sorted(new_citation_data, key=lambda x: min(x['old_citation_ids']))
+        # # Sort by the minimum value in 'citation_ids'
+        # new_citation_data = sorted(new_citation_data, key=lambda x: min(x['old_citation_ids']))
         # process the final citation url and id
         new_citation_id = 1
         for citation in new_citation_data:
