@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import chainlit as cl
 import requests
@@ -18,18 +18,37 @@ async def send_initial_message():
     msg = cl.Message(content=message_content)
     await msg.send()
 
-def format_citation_elements(citations: Dict) -> List:
+def _format_video_elem(source: Dict) -> cl.Text | cl.Video:
+            """Generate the appropriate element based on the source of the video."""
+            if "echo360" in source['url']:
+                iframe_html = f"<html><iframe src={source['url']} width='100%' height='500px' frameborder='0'></iframe></html>"
+                return cl.Text(name=source['title'], content=iframe_html, display="side")
+            elif "youtube" in source['url']:
+                return cl.Video(name=source['title'], url=source['url'], display="side")
+            else:
+                return ValueError(f"Unsupported video source: {source['url']}")
+        
+def _format_citations(citations: Dict[str, Dict]) -> Tuple[str, List]:
+    """Formats citations and prepares video elements for rendering."""
+    formatted_citations = ""
+    video_elements = []
     if citations:
-        formatted_citations = ""
         for id, source in citations.items():
-            formatted_citations += f"{id}. [{source['title']}]({source['url']})\n"
-        elements = [
-            cl.Text(name="Sources", content=formatted_citations, display="inline")
-            ]
-    else:
-        elements = []
-    return elements
+            if source['content_type'] == 'video_transcript':
+                video_elements.append(_format_video_elem(source))
+                formatted_citations += f"{id}. {source['title']}\n"
+            else:
+                formatted_citations += f"{id}. [{source['title']}]({source['url']})\n"  
+    return formatted_citations, video_elements
 
+async def send_answer_with_citations(answer: str, citations: Dict[str, Dict]):
+    """
+    Sends an answer along with formatted citations and associated video elements.
+    """
+    formatted_citations, video_elements = _format_citations(citations)
+    answer_and_citations = f"{answer}\n\n**Sources:**\n{formatted_citations}"
+    await cl.Message(content=answer_and_citations, elements=video_elements).send()
+    
 @cl.on_settings_update
 async def update_model(settings):
     """Update the selected model in the user session."""
@@ -75,9 +94,8 @@ async def main(message: cl.Message):
         
         answer = result["answer"]
         citations = result["citations"]
-        citation_elements = format_citation_elements(citations)
+        await send_answer_with_citations(answer, citations)
         
-        await cl.Message(content=answer, elements=citation_elements).send()
     except requests.exceptions.HTTPError as e:
         await cl.Message(content=f"An Error occured when fetching response from the FastAPI endpoint. Response: {e.response.text}").send()
     except Exception as e:
