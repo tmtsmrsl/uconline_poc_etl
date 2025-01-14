@@ -61,7 +61,7 @@ def process_video_citation(citation, merge_threshold=60):
             else:
                 # End the current group and start a new one
                 combined_citation.append({
-                    'url': _add_timestamp_to_url(citation['url'], earliest_time),
+                    'final_url': _add_timestamp_to_url(citation['url'], earliest_time),
                     'title': _add_timestamps_to_title(citation['title'], block_ids),
                     'old_citation_ids': citation['old_citation_ids'],
                     'block_ids': current_group,
