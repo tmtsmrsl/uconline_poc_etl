@@ -1,61 +1,12 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import chainlit as cl
-import joblib
-import torch
-from chainlit.input_widget import Select, Slider, Switch
-from dotenv import load_dotenv
-from langchain_cerebras import ChatCerebras
-from langchain_openai import ChatOpenAI
-from pymilvus.model.hybrid import BGEM3EmbeddingFunction
+import requests
+from chainlit.input_widget import Select
 
-from RAG.utils import config
-from RAG.utils.ColBERTReranker import ColBERTReranker
-from RAG.utils.QAPipeline import QAPipeline
-from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
+from RAG.utils.setup import load_config
 
-
-def load_env_vars() -> Dict:
-    """Load environment variables from the .env file."""
-    load_dotenv()
-    session_env = {
-        "ZILLIZ_URI": os.getenv("ZILLIZ_URI"),
-        "ZILLIZ_USER": os.getenv("ZILLIZ_USER"),
-        "ZILLIZ_PASSWORD": os.getenv("ZILLIZ_PASSWORD"),
-        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-        "CEREBRAS_API_KEY": os.getenv("CEREBRAS_API_KEY"),
-        "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY")
-    }
-    cl.user_session.set("session_env", session_env)
-    
-def load_config() -> Dict:
-    """Load configuration settings for the app."""
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    session_config = {
-        "DEVICE": DEVICE, 
-        "SPARSE_EMBEDDINGS_PATH": config.SPARSE_EMBEDDINGS_PATH,
-        "COLBERT_MODEL_NAME": config.COLBERT_MODEL_NAME,
-        "ZILLIZ_COLLECTION_NAME": config.ZILLIZ_COLLECTION_NAME,
-        "COURSE_NAME": config.COURSE_NAME,
-        "LLM_TEMPERATURE": config.LLM_TEMPERATURE,
-        "LLM_MAX_RETRIES": config.LLM_MAX_RETRIES
-    }
-    cl.user_session.set("session_config", session_config)
-    
-def initialize_vector_search() -> ZillizVectorSearch:
-    """Initialize vector search with Zilliz."""
-    session_env = cl.user_session.get("session_env")
-    session_config = cl.user_session.get("session_config")
-    
-    dense_embeddings = BGEM3EmbeddingFunction(use_fp16=False, device=session_config['DEVICE'], return_dense=True, return_sparse=False)
-    sparse_embeddings = joblib.load(session_config['SPARSE_EMBEDDINGS_PATH'])
-    colbert_reranker = ColBERTReranker(model_name=session_config['COLBERT_MODEL_NAME'])
-    
-    vector_search = ZillizVectorSearch(session_env["ZILLIZ_USER"], session_env["ZILLIZ_PASSWORD"], session_env["ZILLIZ_URI"], 
-                            session_config['ZILLIZ_COLLECTION_NAME'], sparse_embeddings, dense_embeddings, colbert_reranker)
-    
-    cl.user_session.set("vector_search", vector_search)
 
 async def send_initial_message():
     """Send an initial welcome message to the user."""
@@ -67,49 +18,46 @@ async def send_initial_message():
     msg = cl.Message(content=message_content)
     await msg.send()
 
-def format_citation_elements(citations: Dict) -> List:
-    if citations:
-        formatted_citations = ""
-        for id, source in citations.items():
-            formatted_citations += f"{id}. [{source['title']}]({source['url']})\n"
-        elements = [
-            cl.Text(name="Sources", content=formatted_citations, display="inline")
-            ]
-    else:
-        elements = []
-    return elements
-
-@cl.on_settings_update
-async def setup_pipeline(settings):
-    """Setup the QAPipeline with the selected model."""
-    session_env = cl.user_session.get("session_env")
-    session_config = cl.user_session.get("session_config")
-    vector_search = cl.user_session.get("vector_search")
-
-    selected_model = settings["Model"]
-
-    if selected_model in ["gpt-4o", "gpt-4o-mini"]:
-        llm = ChatOpenAI(api_key=session_env["OPENAI_API_KEY"], model=selected_model, temperature=session_config['LLM_TEMPERATURE'], max_retries=session_config['LLM_MAX_RETRIES'])
-    elif selected_model in ["llama-3.3-70b"]:
-        llm = ChatCerebras(api_key=session_env["CEREBRAS_API_KEY"], model=selected_model, temperature=session_config['LLM_TEMPERATURE'], max_retries=session_config['LLM_MAX_RETRIES'])
+def _format_video_elem(source: Dict) -> cl.Text | cl.Video:
+            """Generate the appropriate element based on the source of the video."""
+            if "echo360" in source['url']:
+                iframe_html = f"<html><iframe src={source['url']} width='100%' height='500px' frameborder='0'></iframe></html>"
+                return cl.Text(name=source['title'], content=iframe_html, display="side")
+            elif "youtube" in source['url']:
+                return cl.Video(name=source['title'], url=source['url'], display="side")
+            else:
+                return ValueError(f"Unsupported video source: {source['url']}")
         
-    qa_pipeline = QAPipeline(llm, vector_search, course_name=session_config['COURSE_NAME'])
-    cl.user_session.set("qa_pipeline", qa_pipeline)
+def _format_citations(citations: Dict[str, Dict]) -> Tuple[str, List]:
+    """Formats citations and prepares video elements for rendering."""
+    formatted_citations = ""
+    video_elements = []
+    if citations:
+        for id, source in citations.items():
+            if source['content_type'] == 'video_transcript':
+                video_elements.append(_format_video_elem(source))
+                formatted_citations += f"{id}. {source['title']}\n"
+            else:
+                formatted_citations += f"{id}. [{source['title']}]({source['url']})\n"  
+    return formatted_citations, video_elements
 
+async def send_answer_with_citations(answer: str, citations: Dict[str, Dict]):
+    """
+    Sends an answer along with formatted citations and associated video elements.
+    """
+    formatted_citations, video_elements = _format_citations(citations)
+    answer_and_citations = f"{answer}\n\n**Sources:**\n{formatted_citations}"
+    await cl.Message(content=answer_and_citations, elements=video_elements).send()
+    
+@cl.on_settings_update
+async def update_model(settings):
+    """Update the selected model in the user session."""
+    selected_model = settings["Model"]
+    cl.user_session.set("model_type", selected_model)
 
 @cl.on_chat_start
 async def start():
-    # Enable the tracing feature of Langsmith
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
-    
-    # Load environment variables and configuration settings
-    load_env_vars()
-    load_config()
-    
-    
-    # intialize vector search
-    initialize_vector_search()
+    cl.user_session.set("session_config", load_config())
     
     # Setup the settings interface and QAPipeline with the default model
     settings = await cl.ChatSettings(
@@ -117,23 +65,38 @@ async def start():
             Select(
                 id="Model",
                 label="Model",
-                values=["gpt-4o", "gpt-4o-mini", "llama-3.3-70b"],
+                values=["llama-3.3", "gpt-4o"],
                 initial_index=0,
             )
         ]
     ).send()
-    await setup_pipeline(settings)
+    await update_model(settings)
     
     await send_initial_message()
 
 @cl.on_message
 async def main(message: cl.Message):
-    qa_pipeline = cl.user_session.get("qa_pipeline") 
+    model_type = cl.user_session.get("model_type") 
+    session_config = cl.user_session.get("session_config")
 
-    response = qa_pipeline.run(query=message.content)
-    answer = response["content"]
-    citations = response["citation"]
-    citation_elements = format_citation_elements(citations)
-
-    await cl.Message(content=answer, elements=citation_elements).send() 
-
+    # Prepare the request payload for the FastAPI endpoint
+    payload = {
+        "query": message.content,
+        "model_type": model_type,
+        "course_name": session_config["COURSE_NAME"]
+    }
+    
+    try:
+        # Send the request to the FastAPI endpoint
+        response = requests.post("http://127.0.0.1:8010/ask", json=payload)
+        response.raise_for_status() 
+        result = response.json()
+        
+        answer = result["answer"]
+        citations = result["citations"]
+        await send_answer_with_citations(answer, citations)
+        
+    except requests.exceptions.HTTPError as e:
+        await cl.Message(content=f"An Error occured when fetching response from the FastAPI endpoint. Response: {e.response.text}").send()
+    except Exception as e:
+        await cl.Message(content=f"An unexpected error occurred: {str(e)}").send()

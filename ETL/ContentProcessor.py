@@ -1,15 +1,16 @@
 import json
 import os
 import re
+import unicodedata
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
 import tiktoken
-import unicodedata
 from bs4 import BeautifulSoup
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents.base import Document
 from markdownify import MarkdownConverter
+
+from ETL.RecursiveTextSplitter import RecursiveTextSplitter
 
 
 class CustomMDConverter(MarkdownConverter):
@@ -57,6 +58,20 @@ class CustomMDConverter(MarkdownConverter):
             return f"\n<h{n}>{text}</h{n}>\n\n"
         else:
             return super()._convert_hn(n, el, text, convert_as_inline)
+        
+    def convert_img(self, el, text, convert_as_inline):
+        alt = el.attrs.get('alt', None) or ''
+        src = el.attrs.get('src', None) or ''
+        title = el.attrs.get('title', None) or ''
+        title_part = ' "%s"' % title.replace('"', r'\"') if title else ''
+        if (convert_as_inline
+                and el.parent.name not in self.options['keep_inline_images_in']) or self.options["keep_image_alt_only"]:
+            if alt:
+                return f"An image with the following description: {alt}"
+            else:
+                return ""
+        else:
+            return '![%s](%s%s)' % (alt, src, title_part)
 
 class ContentHTMLProcessor:
     """
@@ -106,10 +121,11 @@ class ContentMDFormatter:
     """
     Class to format submodule content from HTML to Markdown.
     """
-    def __init__(self, submodule_html: str, excluded_elements_css: Optional[str] = None, **md_converter_options: Any) -> None:
+    def __init__(self, submodule_html: str, excluded_elements_css: Optional[str] = None, md_converter_options: Optional[dict] = None) -> None:
         self.submodule_html = submodule_html
-        self.md_converter_options = {"heading_style": "ATX"}
-        self.md_converter_options.update(md_converter_options) 
+        self.md_converter_options = {"heading_style": "ATX", "keep_image_alt_only": True}
+        if md_converter_options:
+            self.md_converter_options.update(md_converter_options)
         self.excluded_elements_css = excluded_elements_css
 
     @staticmethod
@@ -133,8 +149,7 @@ class ContentMDFormatter:
         processed_html = html_processor.get_html()
         
         # Convert the processed HTML content to Markdown
-        md_converter = CustomMDConverter(**self.md_converter_options)
-        md_content = md_converter.convert(processed_html)
+        md_content = CustomMDConverter(**self.md_converter_options).convert(processed_html)
         md_content = self.clean_spacing(md_content)
         md_content = self.clean_unicode_char(md_content)
         return md_content
@@ -172,76 +187,17 @@ class ContentMDFormatter:
 
 class ContentDocProcessor:
     """
-    Class to process course content from HTML to documents (a dict with content and metadata), which will be used for embedding.
+    Class to process course content from HTML to documents (a native dict or Langchain Document with content and metadata), which will be used for embedding.
     """
 
-    def __init__(self, excluded_elements_css: Optional[str] = None, chunk_token_size: int = 500, chunk_token_overlap: int = 50, encoding_name: str = "o200k_base") -> None:
+    def __init__(self, text_splitter_options: Optional[dict] = None, excluded_elements_css: Optional[str] = None, return_dict: bool = False) -> None:
+        self.text_splitter_options = text_splitter_options
         self.excluded_elements_css = excluded_elements_css
-        self.encoding_name = encoding_name
-        self.chunk_token_size = chunk_token_size
-        self.chunk_token_overlap = chunk_token_overlap
+        self.return_dict = return_dict
 
     def _combine_blocks(self, lesson_blocks: List[Dict[str, Any]]) -> str:
         """Combine lesson blocks into a single Markdown string."""
         return "".join(block['md_content'] for block in lesson_blocks)
-    
-    def _add_overlap(self, lc_splits: List[Document], chunk_token_overlap: int) -> List[Document]:
-        """Adds overlapping tokens to preserve flow when splitting documents."""
-        encoding = tiktoken.get_encoding(self.encoding_name)
-        overlap_from_prev = ""
-        for split in lc_splits:
-            current_chunk = split.page_content
-            split.page_content = overlap_from_prev + current_chunk
-            split.metadata['start_index'] -= len(overlap_from_prev)
-            current_chunk_tokens = encoding.encode(current_chunk)
-            overlap_from_prev = encoding.decode(current_chunk_tokens[-chunk_token_overlap:])
-            
-        return lc_splits
-    
-    def _split_text(self, combined_md: str) -> List[Document]:
-        """Split combined Markdown content into smaller chunks based on token size."""
-        separators = ["\n\n", "\n", " ", ""]
-        
-        text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-            encoding_name=self.encoding_name,
-            chunk_size=self.chunk_token_size,
-            # we don't want to rely on the chunk overlap of the text splitter
-            chunk_overlap=0,
-            separators=separators,
-            strip_whitespace=False,
-            add_start_index=True
-        )
-
-        lc_splits = text_splitter.create_documents([combined_md])
-        lc_splits = self._add_overlap(lc_splits, self.chunk_token_overlap)
-        return lc_splits
-    
-    @staticmethod
-    def _convert_lc_doc_to_dict(doc: Document) -> Dict[str, Any]:
-        """Convert Langchain document into dict format."""
-        doc_dict = doc.dict()
-        
-        for k, v in doc_dict['metadata'].items():
-            doc_dict[k] = v
-        
-        doc_dict['text'] = doc_dict.pop('page_content')
-        doc_dict.pop('id', None)
-        doc_dict.pop('type', None)
-        doc_dict.pop('metadata', None)
-        
-        return doc_dict
-    
-    
-    def _post_process_splits(self, lc_splits: List[Document], metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Post-process the splits, adding metadata and converting to dict format."""
-        temp_splits = deepcopy(lc_splits)
-        for split in temp_splits:
-            split.metadata.update(metadata)
-        
-        # Convert Langchain document into dict format and remove unnecessary fields
-        temp_splits = [self._convert_lc_doc_to_dict(split) for split in temp_splits]
-            
-        return temp_splits
 
     def _process_submodule(self, submodule: Dict[str, Any], module_title: str) -> Dict[str, Any]:
         """Process lesson blocks for a submodule into document splits."""
@@ -251,32 +207,28 @@ class ContentDocProcessor:
         md_lesson_blocks = ContentMDFormatter(temp_submodule['html_content'], self.excluded_elements_css).to_md(split_blocks=True)
         
         # Generate block ranges for metadata
-        data_block_ranges = {
-            block['data_block_id']: {
-                'char_start': block['char_start'],
-                'char_end': block['char_end']
-            }
-            for block in md_lesson_blocks
-        }
+        data_block_ranges = []
+        for block in md_lesson_blocks:
+            data_block_ranges.append({"data_block_id": block['data_block_id'], "char_start": block['char_start']})
         
         # Combine the Markdown blocks
         combined_md = self._combine_blocks(md_lesson_blocks)
         
         # Update submodule with lesson blocks and document splits
+        text_splitter = RecursiveTextSplitter(**self.text_splitter_options)
         temp_submodule['md_lesson_blocks'] = md_lesson_blocks
-        temp_submodule['lc_splits'] = self._split_text(combined_md)
+        temp_submodule['doc_splits'] = text_splitter.split_text(combined_md)
         
         metadata = {
-            "data_block_ranges": data_block_ranges,
+            "index_metadata": data_block_ranges,
             "module_title": module_title.title(),
             "subsection": temp_submodule['subsection'].title(),
             "submodule_title": temp_submodule['title'].title(),
             "submodule_url": temp_submodule['url']
         }
         
-        # Post-process splits (formatting, metadata, dict conversion)
-        temp_submodule['doc_splits'] = self._post_process_splits(temp_submodule['lc_splits'], metadata)
-        temp_submodule.pop('lc_splits', None)
+        # Post-process splits (formatting, metadata, optional dict conversion)
+        temp_submodule['doc_splits'] = text_splitter.post_process_splits(temp_submodule['doc_splits'], metadata, self.return_dict)
         
         return temp_submodule
     
@@ -292,7 +244,7 @@ class ContentDocProcessor:
             if not all(key in submodule for key in keys):
                 raise ValueError(f"Missing keys in submodule: {submodule}")
     
-    def process_module(self, module_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def process_module(self, module_data: Dict[str, Any]) -> List[Dict[str, Any]] | List[Document]:
         """Process all submodules in a module into documents."""
         self._validate_module_data(module_data)
         module_title = module_data['module_title']

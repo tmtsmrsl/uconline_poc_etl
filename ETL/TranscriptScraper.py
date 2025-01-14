@@ -5,12 +5,15 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from youtube_transcript_api import YouTubeTranscriptApi
+
+from ETL.ContentProcessor import ContentMDFormatter
 
 # Set up logging
 log_filename = "video_scraper.log"
@@ -60,43 +63,37 @@ class IframeExtractor:
             if not all(key in submodule for key in keys):
                 raise ValueError(f"Missing keys in submodule: {submodule}")
             
-    def extract_submodule_iframe(self, submodule: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_submodule_iframes(self, submodule: Dict[str, Any]) -> Dict[str, Any]:
         """Extract iframes from a submodule."""
         try:
             soup = BeautifulSoup(submodule['html_content'], 'html.parser')
             extracted_iframes = []
             iframes = soup.find_all("iframe")
+
             for iframe in iframes:
+                # Locate the parent div with the 'data-block-id' attribute
+                parent_div = iframe.find_parent("div", {"data-block-id": True})
+                # Find the previous sibling div with 'data-block-id' attribute
+                previous_div = parent_div.find_previous_sibling("div", {"data-block-id": True})
+                if previous_div:
+                    # Extract the text as description
+                    description = ContentMDFormatter(str(previous_div)).to_md(split_blocks=False)
+                    # Maybe we should also use Regex or LLM to double check if the text is an appropriate description of the video
+                else:
+                    description = "" 
+                
+                # Add iframe details along with description
                 extracted_iframes.append({
-                    "url": iframe.get("src", ""), 
+                    "description": description,
+                    "url": iframe.get("src", ""),
                     "title": iframe.get("title", "")
                 })
             
             logger.info(f"Extracted {len(extracted_iframes)} iframes from submodule: {submodule['title']}")
-            return {
-                "submodule_url": submodule['url'],
-                "iframes": extracted_iframes,
-            }
+            return extracted_iframes
         except Exception as e:
             logger.error(f"Error extracting iframes from submodule {submodule['title']}: {e}")
-            return {
-                "submodule_url": submodule['url'],
-                "iframes": [],
-            }
-        
-    def process_module(self, module_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract iframes from all submodules in a module."""
-        self._validate_module_data(module_data)
-        module_title = module_data['module_title']
-        module_iframes = []
-        
-        for submodule in module_data['submodule_data']:
-            submodule_iframes = self.extract_submodule_iframe(submodule)
-            module_iframes.append(submodule_iframes)
-        
-        logger.info(f"Extracted iframes from submodules in module: {module_title}")
-                
-        return module_iframes
+            return []
 
 class EchoTranscriptScraper:
     """Scrapes Echo360 video transcripts."""
@@ -127,7 +124,7 @@ class EchoTranscriptScraper:
                 title = await page.title()
                 
                 # Save the file to the specified path
-                file_path = f"{output_dir}/{sanitize_filename(title)}.vtt"
+                file_path = os.path.join(output_dir, f"{sanitize_filename(title)}.vtt")
                 await download.save_as(file_path)
 
                 # Close the browser
@@ -138,7 +135,7 @@ class EchoTranscriptScraper:
                 transcript_metadata = {
                     "title": title,
                     "url": url,
-                    "file_path": file_path,
+                    "file_path": Path(file_path).as_posix(),
                 }
 
             except Exception as e:
@@ -158,28 +155,26 @@ class EchoTranscriptScraper:
         transcript_metadatas = await gather_with_concurrency(concurrency_limit, *tasks)
         return transcript_metadatas
     
-    async def process_module_iframes(self, module_title: str, module_iframes: List[Dict[str, Any]], output_dir: str, concurrency_limit: int = 5) -> List[Dict[str, Any]]:
-        """Processes the transcript of all Echo360 videos from a certain module."""
-        module_transcript_metadatas  = []
-        for submodule in module_iframes:
-            iframes = submodule['iframes']
-            echo_urls = [iframe['url'] for iframe in iframes if "echo360" in iframe['url']]
-            if echo_urls:
-                submodule_transcript_metadatas = await self.scrape_transcripts(echo_urls, output_dir, concurrency_limit)
-                module_transcript_metadatas.append({   
-                    "submodule_url": submodule['submodule_url'],
-                    "transcript_metadatas": submodule_transcript_metadatas
-                })
-                
-        # save module_transcript_metadatas to a file
-        with open(f"{output_dir}/module_transcript_metadatas.json", 'w') as f:
-            json.dump(module_transcript_metadatas, f, indent=4)
-        logger.info(f"Saved Echo360 transcript metadata of {module_title} to: {output_dir}")
-
-        return module_transcript_metadatas
+    async def process_submodule_iframes(self, submodule_iframes: List[Dict[str, Any]], output_dir: str, concurrency_limit: int = 5) -> List[Dict[str, Any]]:
+        submodule_transcript_metadatas = []
+        echo_iframes = [iframe for iframe in submodule_iframes if "echo360" in iframe['url']]
+        
+        if echo_iframes:
+            # Extract descriptions and URLs from the filtered iframes
+            echo_descriptions = [iframe['description'] for iframe in echo_iframes]
+            echo_urls = [iframe['url'] for iframe in echo_iframes]
+            
+            transcript_metadatas = await self.scrape_transcripts(echo_urls, output_dir, concurrency_limit)
+            
+            # Add descriptions to the corresponding transcript metadata
+            for description, transcript_metadata in zip(echo_descriptions, transcript_metadatas):
+                transcript_metadata['description'] = description
+            
+            submodule_transcript_metadatas.extend(transcript_metadatas)
+        return submodule_transcript_metadatas
     
-class YoutubeTranscriptExtractor:
-    """Extract YouTube video transcripts."""
+class YoutubeTranscriptScraper:
+    """Scrape YouTube video transcripts."""
     @staticmethod
     def _extract_youtube_embed_url(url: str) -> str:
         """Extract the youtube URL from an embed URL."""
@@ -188,7 +183,7 @@ class YoutubeTranscriptExtractor:
         video_url = query_params.get('url', None)[0]
         return video_url
     
-    def extract_transcript(self, youtube_embed_url: str, title: str, output_dir: str) -> Dict[str, str]:
+    def scrape_transcript(self, youtube_embed_url: str, title: str, output_dir: str) -> Dict[str, str]:
         """Get the transcripts of multiple YouTube videos."""
         try:
             youtube_url = self._extract_youtube_embed_url(youtube_embed_url)
@@ -196,7 +191,7 @@ class YoutubeTranscriptExtractor:
             transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US'])
             
             # Save the transcript to a file
-            file_path = f"{output_dir}/{sanitize_filename(title)}.json"
+            file_path = os.path.join(output_dir, f"{sanitize_filename(title)}.json")
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(transcript, f, indent=4)
                 
@@ -205,79 +200,87 @@ class YoutubeTranscriptExtractor:
             return {
                 "title": title,
                 "url": youtube_url,
-                "file_path": file_path,
+                "file_path": Path(file_path).as_posix(),
             }
             
         except Exception as e:
-            logger.error(f"Error extracting transcript from YouTube URL: {youtube_embed_url}: {e}")
+            logger.error(f"Error scraping transcript from YouTube URL: {youtube_embed_url}: {e}")
             return {
                 "title": title,
                 "url": youtube_url,
                 "file_path": None,
             }
     
-    def process_module_iframes(self, module_title: str, module_iframes: List[Dict[str, Any]], output_dir: str) -> List[Dict[str, Any]]:
-        """Processes the transcript of all YouTube videos from a certain module."""
-        module_transcript_metadatas = []
-        for submodule in module_iframes:
-            iframes = submodule['iframes']
-            submodule_transcript_metadatas = []
-            for iframe in iframes:
-                if "youtube" in iframe['url']:
-                    transcript_metadata = self.extract_transcript(iframe['url'], iframe['title'], output_dir)
-                    submodule_transcript_metadatas.append(transcript_metadata)
-                    
-            if submodule_transcript_metadatas:
-                module_transcript_metadatas.append({
-                    "submodule_url": submodule['submodule_url'],
-                    "transcript_metadatas": submodule_transcript_metadatas
-                })
-            
-        # save module_transcript_metadatas to a file
-        with open(f"{output_dir}/module_transcript_metadatas.json", 'w') as f:
-            json.dump(module_transcript_metadatas, f, indent=4)
+    def process_submodule_iframes(self, submodule_iframes: List[Dict[str, Any]], output_dir: str) -> List[Dict[str, Any]]:
+        """Processes the transcript of all YouTube videos from a certain submodule."""
+        submodule_transcript_metadatas = []
+        for iframe in submodule_iframes:
+            if "youtube" in iframe['url']:
+                transcript_metadata = self.scrape_transcript(iframe['url'], iframe['title'], output_dir)
+                transcript_metadata.update({"description": iframe['description']})
+                submodule_transcript_metadatas.append(transcript_metadata)
         
-        logger.info(f"Saved YouTube transcript of {module_title} metadata to: {output_dir}")
+        return submodule_transcript_metadatas
         
-        return module_transcript_metadatas  
-
-    
-class VideoProcessor:
-    """Processes video transcripts and extracts video iframes."""
+class TranscriptScraper:
+    """Extract the video iframes in a course content and scrape their transcripts."""
     
     def __init__(self) -> None:
         self.iframe_extractor = IframeExtractor()
         self.echo_transcript_scraper = EchoTranscriptScraper()
-        self.youtube_transcript_extractor = YoutubeTranscriptExtractor()
+        self.youtube_transcript_scraper = YoutubeTranscriptScraper()
+    async def process_submodule(self, submodule_data: Dict[str, Any], youtube_output_dir: str, echo360_output_dir: str) -> Dict[str, Any]:
+        submodule_metadata = {
+                    "submodule_title": submodule_data['title'],
+                    "submodule_url": submodule_data['url'],
+                    "subsection": submodule_data['subsection'],
+                }
+                
+        submodule_iframes = self.iframe_extractor.extract_submodule_iframes(submodule_data)
         
-    async def process_module(self, module_data: Dict[str, Any], youtube_output_dir: str = '', echo360_output_dir: str = '') -> Dict[str, Any]:
+        youtube_transcript_metadatas = self.youtube_transcript_scraper.process_submodule_iframes(submodule_iframes, youtube_output_dir)
+        submodule_metadata['youtube_metadatas'] = youtube_transcript_metadatas
+        
+        echo_transcript_metadatas = await self.echo_transcript_scraper.process_submodule_iframes(submodule_iframes, echo360_output_dir)
+        submodule_metadata['echo360_metadatas'] = echo_transcript_metadatas
+        
+        return submodule_metadata
+        
+    async def process_module(self, module_data: Dict[str, Any], output_dir: str) -> Dict[str, Any]:
         """This method processes video transcripts for a given module.
         If no output directory is provided for a platform, that platform's transcripts
         will not be processed.
         """
         try:
-            if youtube_output_dir:
-                if not os.path.exists(youtube_output_dir):
-                    os.makedirs(youtube_output_dir)
-                    logger.info(f"Created directory: {youtube_output_dir}")
+            # Set output directories
+            youtube_output_dir = os.path.join(output_dir, 'youtube')
+            echo360_output_dir = os.path.join(output_dir,'echo360')
             
-            if echo360_output_dir:
-                if not os.path.exists(echo360_output_dir):
-                    os.makedirs(echo360_output_dir)
-                    logger.info(f"Created directory: {echo360_output_dir}")
+            if not os.path.exists(youtube_output_dir):
+                os.makedirs(youtube_output_dir)
+                logger.info(f"Created directory: {youtube_output_dir}")
             
-            module_title = module_data['module_title']        
-            module_iframes = self.iframe_extractor.process_module(module_data)
+            if not os.path.exists(echo360_output_dir):
+                os.makedirs(echo360_output_dir)
+                logger.info(f"Created directory: {echo360_output_dir}")
             
-            if youtube_output_dir:
-                self.youtube_transcript_extractor.process_module_iframes(module_title, module_iframes, output_dir=youtube_output_dir)
+            module_transcript_metadata = {
+                "module_title": module_data['module_title'],
+                "submodule_data": []
+            }
             
-            if echo360_output_dir:
-                await self.echo_transcript_scraper.process_module_iframes(module_title, module_iframes, output_dir=echo360_output_dir)
+            for submodule_data in module_data['submodule_data']:
+                submodule_metadata = await self.process_submodule(submodule_data, youtube_output_dir, echo360_output_dir)
             
-            logger.info(f"Successfully processed module: {module_title}")
+                module_transcript_metadata['submodule_data'].append(submodule_metadata)
+                
+            with open(f"{output_dir}/metadata.json", 'w', encoding='utf-8') as f:
+                json.dump(module_transcript_metadata, f, indent=4)
+
+            logger.info(f"Successfully processed module: {module_data['module_title']}")
+                
         except Exception as e:
-            logger.error(f"Error processing module: {module_title}: {e}")
+            logger.error(f"Error processing module: {module_data['module_title']}: {e}")
 
 
 def main():
@@ -289,12 +292,9 @@ def main():
         help="Path to a single JSON file or a directory containing JSON files."
     )
     parser.add_argument(
-        "--youtube-output-dir",
-        help="Directory to save YouTube transcripts. If not provided, YouTube transcripts will not be processed."
-    )
-    parser.add_argument(
-        "--echo360-output-dir",
-        help="Directory to save Echo360 transcripts. If not provided, Echo360 transcripts will not be processed."
+        "--output-dir",
+        required=True,
+        help="Directory to save the module transcripts. Youtube and Echo360 subdirectories will be created here."
     )
     parser.add_argument(
         "--concurrency-limit",
@@ -321,7 +321,7 @@ def main():
         parser.error(f"Input path is neither a file nor a directory: {args.input}")
 
     # Process each JSON file
-    video_processor = VideoProcessor()
+    ts = TranscriptScraper()
     for json_file in json_files:
         logger.info(f"Processing file: {json_file}")
 
@@ -330,16 +330,11 @@ def main():
 
         # Extract the module name from the filename
         module_name = os.path.splitext(os.path.basename(json_file))[0]
-
-        # Set output directories
-        youtube_output_dir = os.path.join(args.youtube_output_dir, module_name) if args.youtube_output_dir else None
-        echo360_output_dir = os.path.join(args.echo360_output_dir, module_name) if args.echo360_output_dir else None
-
+        
         # Process the module
-        asyncio.run(video_processor.process_module(
+        asyncio.run(ts.process_module(
             module_data,
-            youtube_output_dir=youtube_output_dir,
-            echo360_output_dir=echo360_output_dir
+            output_dir=os.path.join(args.output_dir, module_name)
         ))
 
 if __name__ == "__main__":

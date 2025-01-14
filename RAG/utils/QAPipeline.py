@@ -35,12 +35,13 @@ class PromptManager:
         
     @staticmethod
     def load_generate_prompt(course_name) -> ChatPromptTemplate:
-        generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a user question and some course contents, answer the question based on the course contents and justify your answer by providing an accurate inline citation of the source IDs. If none of the course content answer the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". 
+        generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a user question and some course contents, answer the question COMPREHENSIVELY based on the course contents and justify your answer by providing an ACCURATE inline citation of the source IDs. If none of the course content answer the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". 
 Follow the following format STRICTLY for the final answer:
-This is an example of inline citation^[5]. One sentence can have multiple inline citations^[3], and the inline citation can also consist of multiple numbers^[7]^[8]. 
-
+This is an example of inline citation[5]. One sentence can have multiple inline citations[3], and the inline citation can also consist of multiple numbers[7][8].
 Here are the course contents (not visible to the user):
-{{sources}}"""
+
+{{sources}}
+"""
 
         return ChatPromptTemplate.from_messages([
             ("system", generate_system_prompt),
@@ -48,7 +49,7 @@ Here are the course contents (not visible to the user):
         ])
     
 class QAPipeline():
-    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str):
+    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str, search_top_k_each: int = 5, search_top_k_final: int = 5):
         self.llm = llm
         self.vector_search = vector_search
         self.prompt_manager = PromptManager()
@@ -56,6 +57,8 @@ class QAPipeline():
         self.citation_formatter = CitationFormatter()
         self.guardrail_prompt = self.prompt_manager.load_guardrail_prompt(course_name)
         self.generate_prompt = self.prompt_manager.load_generate_prompt(course_name)
+        self.search_top_k_each = search_top_k_each
+        self.search_top_k_final = search_top_k_final
         self.graph = self.build_graph()
     
     def guardrail(self, state: State):
@@ -67,7 +70,7 @@ class QAPipeline():
         return state["input_allowed"]
         
     def retrieve(self, state: State):
-        retrieved_sources = self.vector_search.hybrid_search(query=state["question"], top_k_final=4)
+        retrieved_sources = self.vector_search.hybrid_search(query=state["question"], top_k_each=self.search_top_k_each, top_k_final=self.search_top_k_final)
         formatted_sources = self.source_formatter.format_sources_for_llm(retrieved_sources)
         return {"sources": retrieved_sources, "formatted_sources": formatted_sources}
 

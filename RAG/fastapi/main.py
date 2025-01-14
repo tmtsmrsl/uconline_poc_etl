@@ -1,87 +1,63 @@
 import os
+from contextlib import asynccontextmanager
 from typing import Dict
 
-import joblib
-import torch
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from langchain_cerebras import ChatCerebras
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
-from pymilvus.model.hybrid import BGEM3EmbeddingFunction
 
-from RAG.utils import config
-from RAG.utils.ColBERTReranker import ColBERTReranker
 from RAG.utils.QAPipeline import QAPipeline
+from RAG.utils.setup import initialize_vector_search, load_config, load_env_vars
 from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
 
 
-def load_env_vars() -> Dict:
-    """Load environment variables from the .env file."""
-    load_dotenv()
-    session_env = {
-        "ZILLIZ_URI": os.getenv("ZILLIZ_URI"),
-        "ZILLIZ_USER": os.getenv("ZILLIZ_USER"),
-        "ZILLIZ_PASSWORD": os.getenv("ZILLIZ_PASSWORD"),
-        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-        # "CEREBRAS_API_KEY": os.getenv("CEREBRAS_API_KEY"),
-        "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY")
-    }
-    return session_env
-
-    
-def load_config() -> Dict:
-    """Load configuration settings for the app."""
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    session_config = {
-        "DEVICE": DEVICE, 
-        "SPARSE_EMBEDDINGS_PATH": config.SPARSE_EMBEDDINGS_PATH,
-        "COLBERT_MODEL_NAME": config.COLBERT_MODEL_NAME,
-        "ZILLIZ_COLLECTION_NAME": config.ZILLIZ_COLLECTION_NAME,
-        "COURSE_NAME": config.COURSE_NAME,
-        "LLM_TEMPERATURE": config.LLM_TEMPERATURE,
-        "LLM_MAX_RETRIES": config.LLM_MAX_RETRIES
-    }
-    return session_config
-
-def initialize_vector_search(session_env, session_config) -> ZillizVectorSearch:
-    """Initialize vector search with Zilliz."""
-    dense_embeddings = BGEM3EmbeddingFunction(use_fp16=False, device=session_config['DEVICE'], return_dense=True, return_sparse=False)
-    sparse_embeddings = joblib.load(session_config['SPARSE_EMBEDDINGS_PATH'])
-    colbert_reranker = ColBERTReranker(model_name=session_config['COLBERT_MODEL_NAME'])
-    
-    return ZillizVectorSearch(session_env["ZILLIZ_USER"], session_env["ZILLIZ_PASSWORD"], session_env["ZILLIZ_URI"], 
-                            session_config['ZILLIZ_COLLECTION_NAME'], sparse_embeddings, dense_embeddings, colbert_reranker)
-
-def setup_pipeline() -> QAPipeline:
+def setup_pipeline(model_type: str, vector_search: ZillizVectorSearch) -> QAPipeline:
     """Setup the QA pipeline with pre-configured settings."""
     session_env = load_env_vars()
     session_config = load_config()
 
-    vector_search = initialize_vector_search(session_env, session_config)
-    llm = ChatOpenAI(
-        api_key=session_env['OPENAI_API_KEY'],
-        model="gpt-4o",
-        temperature=session_config['LLM_TEMPERATURE'],
-        max_retries=session_config['LLM_MAX_RETRIES']
-    )
+    if model_type == "llama-3.3":
+        llm = ChatCerebras(
+            api_key=session_env['CEREBRAS_API_KEY'],
+            model="llama-3.3-70b",
+            temperature=session_config['LLM_TEMPERATURE'],
+            max_retries=session_config['LLM_MAX_RETRIES']
+        )
+    elif model_type == "gpt-4o":
+        llm = ChatOpenAI(
+            api_key=session_env['OPENAI_API_KEY'],
+            model="gpt-4o",
+            temperature=session_config['LLM_TEMPERATURE'],
+            max_retries=session_config['LLM_MAX_RETRIES']
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Invalid model type. Choose either 'llama-3.3' or 'gpt-4o'.")
     return QAPipeline(llm, vector_search, course_name=session_config['COURSE_NAME'])
 
 # Enable Langsmith tracing
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
 
-# FastAPI app initialization
-app = FastAPI()
 
-# Initialize the QA pipeline
-qa_pipeline = setup_pipeline()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize the vector search and store it in the app state."""
+    session_env = load_env_vars()
+    session_config = load_config()
+    app.state.vector_search = initialize_vector_search(session_env, session_config)
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 class QueryRequest(BaseModel):
     query: str
+    model_type: str = "llama-3.3"
 
 class Citation(BaseModel):
     url: str
     title: str
+    content_type: str
     
 class Response(BaseModel):
     answer: str
@@ -92,8 +68,12 @@ class Response(BaseModel):
         description="Submit a question to the QA pipeline and retrieve an answer with citations of relevant course content.")
 async def ask_question(request: QueryRequest):
     query = request.query
+    model_type = request.model_type
     
     try:
+        # initializing the QA pipeline with the specified model type
+        qa_pipeline = setup_pipeline(model_type=model_type, vector_search=app.state.vector_search)
+        
         # Running the query through the QA pipeline
         response = qa_pipeline.run(query=query)
         answer = response["content"]
