@@ -36,13 +36,35 @@ class PromptManager:
         ])
         
     @staticmethod
-    def load_generate_prompt(course_name) -> ChatPromptTemplate:
+    def load_generate_answer_prompt(course_name) -> ChatPromptTemplate:
         generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a student question and some course contents, answer the question COMPREHENSIVELY based on the course contents and justify your answer by providing an ACCURATE inline citation of the source IDs. If none of the course content answer the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". 
 Follow the following format STRICTLY for the final answer:
 This is an example of inline citation[5]. One sentence can have multiple inline citations[3], and the inline citation can also consist of multiple numbers[7][8].
 """
 
-        human_system_prompt = f"""Here are the course contents (not visible to the student):
+        human_system_prompt = f"""Here are the course contents (not directly visible to the student):
+{{sources}}
+
+Here is the student question:
+{{question}}
+"""
+
+
+        return ChatPromptTemplate.from_messages([
+            ("system", generate_system_prompt),
+            ("human", human_system_prompt),
+        ])
+        
+    @staticmethod
+    def load_generate_recommendation_prompt(course_name) -> ChatPromptTemplate:
+        generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a student question and some course contents, recommend the relevant course contents to the student by providing the source title and elaborate how they are related to the question. Please be COMPREHENSIVE and justify your recommendation with an inline citation of the source ID as well. If none of the course content is related to the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". DO NOT provide a direct answer to the student's question as you want to encourage active learning.
+For example, if a student asks: 
+"Please give a detailed view on indigenous sutainability."
+You should respond with the following format:
+"submodule_x provides an introduction to indigenous knowledge and views[6], including their importance in sustainability and how they can inform sustainability strategies[8][9][10]. video_y offers an overview of indigenous perspectives on sustainability[3], highlighting the value of incorporating Māori and Pacific perspectives in sustainable engineering practice[5]. submodule_z discusses the integration of indigenous sustainability indicators[12][14], including the importance of measuring these indicators in New Zealand and how they can support Māori sustainable development[15]. submodule_a provides an opportunity to apply learned concepts to a sustainability framework or practice[20], considering how mātauranga Māori and kaupapa Māori can be integrated to improve alignment with indigenous values and sustainability goals[25][26][28]." 
+"""
+
+        human_system_prompt = f"""Here are the course contents (not directly visible to the student):
 {{sources}}
 
 Here is the student question:
@@ -56,14 +78,19 @@ Here is the student question:
         ])
     
 class QAPipeline():
-    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str, search_top_k_each: int = 5, search_top_k_final: int = 5):
+    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str, response_type: str = "answer", search_top_k_each: int = 5, search_top_k_final: int = 5):
         self.llm = llm
         self.vector_search = vector_search
         self.prompt_manager = PromptManager()
         self.source_formatter = SourceFormatter()
         self.citation_formatter = CitationFormatter()
         self.guardrail_prompt = self.prompt_manager.load_guardrail_prompt(course_name)
-        self.generate_prompt = self.prompt_manager.load_generate_prompt(course_name)
+        if response_type == "answer":
+            self.generate_prompt = self.prompt_manager.load_generate_answer_prompt(course_name)
+        elif response_type == "recommendation":
+            self.generate_prompt = self.prompt_manager.load_generate_recommendation_prompt(course_name)
+        else:
+            raise ValueError("response_type must be either 'answer' or 'recommendation'")
         self.search_top_k_each = search_top_k_each
         self.search_top_k_final = search_top_k_final
         self.graph = self.build_graph()

@@ -50,10 +50,12 @@ async def send_answer_with_citations(answer: str, citations: Dict[str, Dict]):
     await cl.Message(content=answer_and_citations, elements=video_elements).send()
     
 @cl.on_settings_update
-async def update_model(settings):
+async def update_settings(settings):
     """Update the selected model in the user session."""
-    selected_model = settings["Model"]
-    cl.user_session.set("model_type", selected_model)
+    model_type = settings["model_type"]
+    response_type = settings['response_type']
+    cl.user_session.set("model_type", model_type)
+    cl.user_session.set("response_type", response_type)
 
 @cl.on_chat_start
 async def start():
@@ -63,27 +65,31 @@ async def start():
     settings = await cl.ChatSettings(
         [
             Select(
-                id="Model",
-                label="Model",
+                id="model_type",
+                label="Model Type",
                 values=["llama-3.3", "gpt-4o"],
                 initial_index=0,
-            )
+            ),
+            Select(
+                id="response_type",
+                label="Response Type",
+                values=["answer", "recommendation"],
+                initial_index=0,
+            ),
+            
         ]
     ).send()
-    await update_model(settings)
+    await update_settings(settings)
     
     await send_initial_message()
 
 @cl.on_message
 async def main(message: cl.Message):
-    model_type = cl.user_session.get("model_type") 
-    session_config = cl.user_session.get("session_config")
-
     # Prepare the request payload for the FastAPI endpoint
     payload = {
         "query": message.content,
-        "model_type": model_type,
-        "course_name": session_config["COURSE_NAME"]
+        "model_type": cl.user_session.get("model_type"),
+        "response_type": cl.user_session.get("response_type")
     }
     
     try:

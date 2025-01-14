@@ -52,10 +52,11 @@ curl -X 'POST' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "How can we support indigenous sustainability?",
-    "model_type": "llama-3.3"
+    "model_type": "llama-3.3",
+    "response_type": "recommendation"
   }'
 ```
-Currently, the available model types are `llama-3.3` and `gpt-4o`.
+Currently, the available model types are `llama-3.3` and `gpt-4o`. Response types can be either `recommendation` (does not provide direct answer, but recommends relevant materials related to the question) or `answer` (provides direct answer to the question).
 
 #### Chainlit app
 If you want to interact with the FastAPI endpoint using a chatbot interface, you can run the command below from the project root directory to start the Chainlit app on your local machine.

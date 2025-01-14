@@ -12,7 +12,7 @@ from RAG.utils.setup import initialize_vector_search, load_config, load_env_vars
 from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
 
 
-def setup_pipeline(model_type: str, vector_search: ZillizVectorSearch) -> QAPipeline:
+def setup_pipeline(model_type: str, response_type: str, vector_search: ZillizVectorSearch) -> QAPipeline:
     """Setup the QA pipeline with pre-configured settings."""
     session_env = load_env_vars()
     session_config = load_config()
@@ -33,7 +33,7 @@ def setup_pipeline(model_type: str, vector_search: ZillizVectorSearch) -> QAPipe
         )
     else:
         raise HTTPException(status_code=400, detail="Invalid model type. Choose either 'llama-3.3' or 'gpt-4o'.")
-    return QAPipeline(llm, vector_search, course_name=session_config['COURSE_NAME'])
+    return QAPipeline(llm, vector_search, course_name=session_config['COURSE_NAME'], response_type=response_type)
 
 # Enable Langsmith tracing
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
@@ -53,6 +53,7 @@ app = FastAPI(lifespan=lifespan)
 class QueryRequest(BaseModel):
     query: str
     model_type: str = "llama-3.3"
+    response_type: str = "answer"
 
 class Citation(BaseModel):
     url: str
@@ -64,15 +65,16 @@ class Response(BaseModel):
     citations: Dict[int, Citation] 
 
 
-@app.post("/ask", response_model=Response, summary="Anwer questions related to the course content.", 
-        description="Submit a question to the QA pipeline and retrieve an answer with citations of relevant course content.")
+@app.post("/ask", response_model=Response, summary="Ask questions related to the course content.", 
+        description="Submit a question to the QA pipeline and retrieve an answer or recommendation with citations of relevant course content.")
 async def ask_question(request: QueryRequest):
     query = request.query
     model_type = request.model_type
+    response_type = request.response_type
     
     try:
         # initializing the QA pipeline with the specified model type
-        qa_pipeline = setup_pipeline(model_type=model_type, vector_search=app.state.vector_search)
+        qa_pipeline = setup_pipeline(model_type=model_type, response_type=response_type, vector_search=app.state.vector_search)
         
         # Running the query through the QA pipeline
         response = qa_pipeline.run(query=query)
