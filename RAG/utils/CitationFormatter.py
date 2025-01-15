@@ -62,7 +62,7 @@ def process_video_citation(citation, merge_threshold=60):
                 # End the current group and start a new one
                 combined_citation.append({
                     'final_url': _add_timestamp_to_url(citation['url'], earliest_time),
-                    'title': _add_timestamps_to_title(citation['title'], block_ids),
+                    'title': _add_timestamps_to_title(citation['title'], current_group),
                     'old_citation_ids': citation['old_citation_ids'],
                     'block_ids': current_group,
                     'content_type': citation['content_type']
@@ -74,7 +74,7 @@ def process_video_citation(citation, merge_threshold=60):
     if current_group:
         combined_citation.append({
             'final_url': _add_timestamp_to_url(citation['url'], earliest_time),
-            'title': _add_timestamps_to_title(citation['title'], block_ids),
+            'title': _add_timestamps_to_title(citation['title'], current_group),
             'old_citation_ids': citation['old_citation_ids'],
             'block_ids': current_group,
             'content_type': citation['content_type']
