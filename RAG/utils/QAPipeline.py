@@ -57,11 +57,15 @@ Here is the student question:
         
     @staticmethod
     def load_generate_recommendation_prompt(course_name) -> ChatPromptTemplate:
-        generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a student question and some course contents, recommend the relevant course contents to the student by providing the source title and elaborate how they are related to the question. Please be COMPREHENSIVE and justify your recommendation with an inline citation of the source ID as well. If none of the course content is related to the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". DO NOT provide a direct answer to the student's question as you want to encourage active learning.
-For example, if a student asks: 
-"Please give a detailed view on indigenous sutainability."
-You should respond with the following format:
-"submodule_x provides an introduction to indigenous knowledge and views[6], including their importance in sustainability and how they can inform sustainability strategies[8][9][10]. video_y offers an overview of indigenous perspectives on sustainability[3], highlighting the value of incorporating Māori and Pacific perspectives in sustainable engineering practice[5]. submodule_z discusses the integration of indigenous sustainability indicators[12][14], including the importance of measuring these indicators in New Zealand and how they can support Māori sustainable development[15]. submodule_a provides an opportunity to apply learned concepts to a sustainability framework or practice[20], considering how mātauranga Māori and kaupapa Māori can be integrated to improve alignment with indigenous values and sustainability goals[25][26][28]." 
+        generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a student question and some course contents, recommend the RELEVANT course contents to the student by providing their source title and elaborate how their content are related to the question. Please justify your recommendation with an inline citation of the source ID as well. If none of the course content is related to the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". DO NOT provide a direct answer to the student's question as you want to encourage active learning.
+        
+Follow the following structure for the final answer:
+'''
+The following course contents are relevant to (topic of the question):
+* **(source title x)** provides an introduction to ...[6], including their importance in ...[8][9]. 
+* **(source title y)** offers an overview of ..., highlighting the value of ...[2]. 
+* **(source title z)** discusses the integration of ...[12][14]. It also includes ...[15]. 
+''' 
 """
 
         human_system_prompt = f"""Here are the course contents (not directly visible to the student):
