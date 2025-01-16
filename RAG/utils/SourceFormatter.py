@@ -161,6 +161,11 @@ class SourceFormatter:
             source_dicts.append(source_dict)
 
             # Add the formatted splits to the final output
-            final_formatted_sources += "===\n" + source_dict['contextual_header'] + "\n" + formatted_splits + "\n"
+            if source_dict['content_type'] == "video_transcript":
+                source_type = "Video"
+            elif source_dict['content_type'] == "html_content":
+                source_type = "Submodule"
+                
+            final_formatted_sources += f"===\nTITLE: {source_type} {source_dict['title']}\n" + f"DESCRIPTION: {source_dict['contextual_header']}\n"  + f"---\nCONTENT:\n{formatted_splits}\n" 
 
         return {"content": final_formatted_sources, "source_dicts": source_dicts}

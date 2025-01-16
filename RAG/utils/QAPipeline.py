@@ -2,6 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import Dict, List, TypedDict
 
+from RAG.utils.AzureVectorSearch import AzureVectorSearch
 from RAG.utils.CitationFormatter import CitationFormatter
 from RAG.utils.SourceFormatter import SourceFormatter
 from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
@@ -36,13 +37,39 @@ class PromptManager:
         ])
         
     @staticmethod
-    def load_generate_prompt(course_name) -> ChatPromptTemplate:
+    def load_generate_answer_prompt(course_name) -> ChatPromptTemplate:
         generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a student question and some course contents, answer the question COMPREHENSIVELY based on the course contents and justify your answer by providing an ACCURATE inline citation of the source IDs. If none of the course content answer the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". 
 Follow the following format STRICTLY for the final answer:
 This is an example of inline citation[5]. One sentence can have multiple inline citations[3], and the inline citation can also consist of multiple numbers[7][8].
 """
 
-        human_system_prompt = f"""Here are the course contents (not visible to the student):
+        human_system_prompt = f"""Here are the course contents (not directly visible to the student):
+{{sources}}
+
+Here is the student question:
+{{question}}
+"""
+
+
+        return ChatPromptTemplate.from_messages([
+            ("system", generate_system_prompt),
+            ("human", human_system_prompt),
+        ])
+        
+    @staticmethod
+    def load_generate_recommendation_prompt(course_name) -> ChatPromptTemplate:
+        generate_system_prompt = f"""You're a helpful personalized tutor for {course_name}. Given a student question and some course contents, recommend the RELEVANT course contents to the student by providing their source title and elaborate how their content are related to the question. Please justify your recommendation with an inline citation of the source ID as well. If none of the course content is related to the question, just say: "I'm sorry, I couldn't find any relevant course content related to your question". DO NOT provide a direct answer to the student's question as you want to encourage active learning.
+        
+Follow the following structure for the final answer:
+'''
+The following course contents are relevant to (topic of the question):
+* **(source title x)** provides an introduction to ...[6], including their importance in ...[8][9]. 
+* **(source title y)** offers an overview of ..., highlighting the value of ...[2]. 
+* **(source title z)** discusses the integration of ...[12][14]. It also includes ...[15]. 
+''' 
+"""
+
+        human_system_prompt = f"""Here are the course contents (not directly visible to the student):
 {{sources}}
 
 Here is the student question:
@@ -56,14 +83,20 @@ Here is the student question:
         ])
     
 class QAPipeline():
-    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str, search_top_k_each: int = 5, search_top_k_final: int = 5):
+    def __init__(self, llm, vector_search: ZillizVectorSearch | AzureVectorSearch, 
+                course_name: str, response_type: str = "answer", search_top_k_each: int = 5, search_top_k_final: int = 5):
         self.llm = llm
         self.vector_search = vector_search
         self.prompt_manager = PromptManager()
         self.source_formatter = SourceFormatter()
         self.citation_formatter = CitationFormatter()
         self.guardrail_prompt = self.prompt_manager.load_guardrail_prompt(course_name)
-        self.generate_prompt = self.prompt_manager.load_generate_prompt(course_name)
+        if response_type == "answer":
+            self.generate_prompt = self.prompt_manager.load_generate_answer_prompt(course_name)
+        elif response_type == "recommendation":
+            self.generate_prompt = self.prompt_manager.load_generate_recommendation_prompt(course_name)
+        else:
+            raise ValueError("response_type must be either 'answer' or 'recommendation'")
         self.search_top_k_each = search_top_k_each
         self.search_top_k_final = search_top_k_final
         self.graph = self.build_graph()

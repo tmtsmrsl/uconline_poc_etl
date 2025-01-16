@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "UC Online Copilot",
+    "version": "1.0",
+    "description": "Adds a copilot to UC Online site to help students navigate through the course materials.",
+    "permissions": ["scripting"],
+    "content_scripts": [
+        {
+            "matches": ["*://my.uconline.ac.nz/course/view.php?id=549*"],
+            "js": ["content.js"]
+        }
+    ]
+}

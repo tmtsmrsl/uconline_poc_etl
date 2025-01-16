@@ -32,9 +32,9 @@ python -m ETL.TranscriptScraper --input artifact/emgt605/html_content --output-d
 ```
 This will save the transcript and metadata (`metadata.json`) of videos for each module in the output directory. Youtube transcripts are saved as JSON files, and Echo360 transcripts are saved as VTT files in their own respective subdirectories.
 
-4. Process the HTML content and video transcripts to documents using `ETL/ContentProcessor.py` and `ETL/TranscriptProcessor.py` respectively. The documents will store the content in a format that is LLM-friendly, along with additional metadata. Please check the Section 2 of `ETL/vector_db_loading.ipynb` for an example.
+4. Process the HTML content and video transcripts to documents using `ETL/ContentProcessor.py` and `ETL/TranscriptProcessor.py` respectively. The documents will store the content in a format that is LLM-friendly, along with additional metadata. Please check the Section 2 of `ETL/zilliz_vector_db_loading.ipynb` for an example.
 
-5. Store the embeddings of the documents in a vector database. Please check the Section 3 of `ETL/vector_db_loading.ipynb` for an example. Note that I am using BGE-M3 for the dense embeddings, BM25 for the sparse embeddings, and Zilliz (cloud-managed Milvus) for the vector database. The trained sparse embeddings should be stored for future use.
+5. Store the embeddings of the documents in a vector database. Please check the Section 3 of `ETL/zilliz_vector_db_loading.ipynb` for an example. Note that I am using BGE-M3 for the dense embeddings, BM25 for the sparse embeddings, and Zilliz (cloud-managed Milvus) for the vector database. The trained sparse embeddings should be stored for future use.
 
 ## RAG 
 You can run the RAG pipeline either as a standalone FastAPI endpoint or bundled with the Chainlit app, which provides a chatbot interface for interaction. 
@@ -52,10 +52,11 @@ curl -X 'POST' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "How can we support indigenous sustainability?",
-    "model_type": "llama-3.3"
+    "model_type": "llama-3.3",
+    "response_type": "recommendation"
   }'
 ```
-Currently, the available model types are `llama-3.3` and `gpt-4o`.
+Currently, the available model types are `llama-3.3` and `gpt-4o`. Response types can be either `recommendation` (does not provide direct answer, but recommends relevant materials related to the question) or `answer` (provides direct answer to the question).
 
 #### Chainlit app
 If you want to interact with the FastAPI endpoint using a chatbot interface, you can run the command below from the project root directory to start the Chainlit app on your local machine.

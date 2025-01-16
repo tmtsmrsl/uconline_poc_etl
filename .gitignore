@@ -3,7 +3,6 @@
 course_materials
 __pycache__
 *scratch.ipynb
-artifact
 .files
 artifact
 *.log
