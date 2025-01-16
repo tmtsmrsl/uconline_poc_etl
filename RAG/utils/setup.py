@@ -36,7 +36,7 @@ def load_config() -> Dict:
         "COURSE_NAME": config.COURSE_NAME,
         "LLM_TEMPERATURE": config.LLM_TEMPERATURE,
         "LLM_MAX_RETRIES": config.LLM_MAX_RETRIES,
-        "ZILLIZ_OUTPUT_FIELDS": config.ZILLIZ_OUTPUT_FIELDS
+        "OUTPUT_FIELDS": config.OUTPUT_FIELDS
     }
     return session_config
 
@@ -47,5 +47,5 @@ def initialize_vector_search(session_env, session_config) -> ZillizVectorSearch:
     colbert_reranker = ColBERTReranker(model_name=session_config['COLBERT_MODEL_NAME'])
     
     return ZillizVectorSearch(session_env["ZILLIZ_USER"], session_env["ZILLIZ_PASSWORD"], session_env["ZILLIZ_URI"], 
-                            session_config['ZILLIZ_COLLECTION_NAME'], session_config['ZILLIZ_OUTPUT_FIELDS'],
+                            session_config['ZILLIZ_COLLECTION_NAME'], session_config['OUTPUT_FIELDS'],
                             sparse_embeddings, dense_embeddings, colbert_reranker)
