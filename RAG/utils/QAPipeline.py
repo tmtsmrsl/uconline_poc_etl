@@ -2,6 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import Dict, List, TypedDict
 
+from RAG.utils.AzureVectorSearch import AzureVectorSearch
 from RAG.utils.CitationFormatter import CitationFormatter
 from RAG.utils.SourceFormatter import SourceFormatter
 from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
@@ -82,7 +83,8 @@ Here is the student question:
         ])
     
 class QAPipeline():
-    def __init__(self, llm, vector_search: ZillizVectorSearch, course_name: str, response_type: str = "answer", search_top_k_each: int = 5, search_top_k_final: int = 5):
+    def __init__(self, llm, vector_search: ZillizVectorSearch | AzureVectorSearch, 
+                course_name: str, response_type: str = "answer", search_top_k_each: int = 5, search_top_k_final: int = 5):
         self.llm = llm
         self.vector_search = vector_search
         self.prompt_manager = PromptManager()

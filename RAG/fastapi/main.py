@@ -10,9 +10,10 @@ from pydantic import BaseModel
 from RAG.utils.QAPipeline import QAPipeline
 from RAG.utils.setup import initialize_vector_search, load_config, load_env_vars
 from RAG.utils.ZillizVectorSearch import ZillizVectorSearch
+from RAG.utils.AzureVectorSearch import AzureVectorSearch
 
 
-def setup_pipeline(model_type: str, response_type: str, vector_search: ZillizVectorSearch) -> QAPipeline:
+def setup_pipeline(model_type: str, response_type: str, vector_search: ZillizVectorSearch | AzureVectorSearch) -> QAPipeline:
     """Setup the QA pipeline with pre-configured settings."""
     session_env = load_env_vars()
     session_config = load_config()
