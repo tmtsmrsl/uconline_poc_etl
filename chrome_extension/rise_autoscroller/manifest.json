@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Rise Autoscroller",
     "version": "1.0",
-    "permissions": ["activeTab", "scripting"],
+    "permissions": [],
     "content_scripts": [
         {
             "matches": ["*://rise.articulate.com/share/*"],

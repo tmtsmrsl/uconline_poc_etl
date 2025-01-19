@@ -25,3 +25,5 @@ fastapi[all]==0.115.6
 youtube-transcript-api==0.6.3
 webvtt-py==0.5.1
 deepmultilingualpunctuation==1.0.1
+azure-search-documents==11.6.0b8 
+azure-identity==1.19.0
