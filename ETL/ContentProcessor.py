@@ -72,6 +72,12 @@ class CustomMDConverter(MarkdownConverter):
                 return ""
         else:
             return '![%s](%s%s)' % (alt, src, title_part)
+    
+    def convert_a(self, el, text, convert_as_inline):
+        if self.options["keep_a_text_only"]:
+            return text.replace("(opens in a new tab)", "")
+        else:
+            return super().convert_a(el, text, convert_as_inline)
 
 class ContentHTMLProcessor:
     """
@@ -123,7 +129,7 @@ class ContentMDFormatter:
     """
     def __init__(self, submodule_html: str, excluded_elements_css: Optional[str] = None, md_converter_options: Optional[dict] = None) -> None:
         self.submodule_html = submodule_html
-        self.md_converter_options = {"heading_style": "ATX", "keep_image_alt_only": True}
+        self.md_converter_options = {"heading_style": "ATX", "keep_image_alt_only": True, "keep_a_text_only": True}
         if md_converter_options:
             self.md_converter_options.update(md_converter_options)
         self.excluded_elements_css = excluded_elements_css

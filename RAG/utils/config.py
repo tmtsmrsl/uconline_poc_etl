@@ -7,7 +7,7 @@ COLBERT_MODEL_NAME = "answerdotai/answerai-colbert-small-v1"
 ZILLIZ_COLLECTION_NAME = "emgt_605_bge_bm25_500_50_v3"
 
 # The following variables are used if VECTOR_SEARCH_DB is set to 'azure'
-AZURE_INDEX_NAME = "emgt605_v3"
+AZURE_INDEX_NAME = "emgt605_v4"
 
 OUTPUT_FIELDS = [
             "pk",
