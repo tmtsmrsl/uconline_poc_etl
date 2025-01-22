@@ -39,6 +39,9 @@ This will save the transcript and metadata (`metadata.json`) of videos for each 
 If you want to do step 4 and 5 using Azure Search vector database and OpenAI text embeddings, you can use the `ETL/notebook/azure_vector_db_loading.ipynb` notebook. If you want to do step 4 and 5 using open-source tech stacks (Zilliz vector database and BGE-M3 embeddings), you can use the `ETL/notebook/zilliz_vector_db_loading.ipynb` notebook.
 
 ## RAG 
+For the most updated version of the RAG pipeline (optimized for deployment on Azure), please refer to the following repository:
+https://github.com/tmtsmrsl/azure_uconline_poc
+
 You can run the RAG pipeline either as a standalone FastAPI endpoint or bundled with the Chainlit app, which provides a chatbot interface for interaction. 
 
 #### FastAPI endpoint
