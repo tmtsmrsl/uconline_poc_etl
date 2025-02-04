@@ -1,11 +1,10 @@
-# UCONLINE CHATBOT POC
-A proof of concept for a chatbot that can be used to help students navigate through the course content for UC Online. The course used for this POC is EMGT605 - Sustainability Systems in Engineering and the module materials are available on the Articulate Rise platform. 
+This repository implements the ETL pipeline for the EMGT605 chatbot, a proof of concept designed to help students navigate course content on UC Online. The pipeline scrapes module materials from the Articulate Rise platform and stores them in a vector database.
 
 ## Setup
 It is recommended to use Python3.10 for this project to avoid any compatibility issues. All the required dependencies are listed in the `requirements.txt` file. Make a `.env` file in the project root directory and add the envinroment variables listed on the `.env.sample` file. 
 
 ## ETL
-Instead of parsing the PDFs containing the screenshots of the module materials, I decided to scrape the content directly from the Articulate Rise platform using Playwright as it is more efficient (no PDF export is required, using rule-based approach as opposed to ML models), ensure traceability of the block sections, and results in a better quality.
+Instead of parsing the PDFs containing the screenshots of the module materials, I decided to scrape the content directly from the Articulate Rise platform using Playwright. This approach is more efficient as it eliminates the need for PDF export and relies on a rule-based method rather than computationally intensive ML models. It also produces better results since the rule-based method is more deterministic and ensures traceability of block sections.
 
 The ETL process is as follows:
 1. Save the URLs of the main module (not the submodule) in a JSON file. Below is an example of the JSON file structure.
