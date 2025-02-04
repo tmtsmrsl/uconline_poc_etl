@@ -2,7 +2,15 @@
 A proof of concept for a chatbot that can be used to help students navigate through the course content for UC Online. The course used for this POC is EMGT605 - Sustainability Systems in Engineering and the module materials are available on the Articulate Rise platform. 
 
 ## Setup
-It is recommended to use Python3.10 for this project to avoid any compatibility issues. All the required dependencies are listed in the `requirements.txt` file. Make a `.env` file in the project root directory and add the envinroment variables listed on the `.env.sample` file. 
+It is recommended to use Python3.10 for this project to avoid any compatibility issues.
+
+For first-timer, create a virtual environment and install the dependencies.
+```bash
+python -m venv project.venv
+source project.venv/Scripts/activate 
+python -m pip install -r requirements.txt
+```
+Make a `.env` file in the project root directory and add the envinroment variables listed on the `.env.sample` file. 
 
 ## ETL
 Instead of parsing the PDFs containing the screenshots of the module materials, I decided to scrape the content directly from the Articulate Rise platform using Playwright as it is more efficient (no PDF export is required, using rule-based approach as opposed to ML models), ensure traceability of the block sections, and results in a better quality.
@@ -38,4 +46,6 @@ This will save the transcript and metadata (`metadata.json`) of videos for each 
 
 5. Store the embeddings of the documents in a vector database. 
 
-If you want to do step 4 and 5 using Azure Search vector database and OpenAI text embeddings, you can use the `ETL/notebook/azure_vector_db_loading.ipynb` notebook. If you want to do step 4 and 5 using open-source tech stacks (Zilliz vector database and BGE-M3 embeddings), you can use the `ETL/notebook/zilliz_vector_db_loading.ipynb` notebook.
+If you want to do step 4 and 5 using Azure Search vector database and OpenAI text embeddings, you can use the `ETL/notebook/azure_vector_db_loading.ipynb` notebook. Make sure to have a `.env` file in the main directory following the format on the `.env.sample` file.
+
+If you want to do step 4 and 5 using open-source tech stacks (Zilliz vector database and BGE-M3 embeddings), you can use the `ETL/notebook/zilliz_vector_db_loading.ipynb` notebook. Make sure to add the necessary environment variables to Kaggle secrets.
