@@ -1,4 +1,4 @@
-This repository implements the ETL pipeline for the EMGT605 chatbot, a proof of concept designed to help students navigate course content on UC Online. The pipeline scrapes module materials from the Articulate Rise platform and stores them in a vector database.
+This repository implements the ETL pipeline for the EMGT605 chatbot, which scrapes module materials from the Articulate Rise platform and stores them in a vector database. Once the course contents are stored in the vector database, the RAG pipeline [(uconline_poc_rag)](https://github.com/tmtsmrsl/uconline_poc_rag) enables users to ask questions related to the course and receive responses backed by the course materials.
 
 ## Setup
 It is recommended to use Python3.10 for this project to avoid any compatibility issues.
